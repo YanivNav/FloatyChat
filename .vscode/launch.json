@@ -2,10 +2,29 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "command": "./node_modules/.bin/astro dev",
-      "name": "Development server",
+      "name": "Dev + Debug",
+      "type": "node-terminal",
       "request": "launch",
-      "type": "node-terminal"
+      "command": "npm run dev",
+      "env": {
+        "NODE_OPTIONS": "--inspect"
+      }
+    },
+    {
+      "name": "Attach to Node",
+      "type": "node",
+      "request": "attach",
+      "port": 9229,
+      "restart": true,
+      "localRoot": "${workspaceFolder}",
+      "remoteRoot": "${workspaceFolder}"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Dev + Attach",
+      "configurations": ["Dev + Debug", "Attach to Node"],
+      "stopAll": true
     }
   ]
 }

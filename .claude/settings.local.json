@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__claude_ai_Wix__SearchWixSDKDocumentation",
+      "mcp__claude_ai_Wix__ReadFullDocsMethodSchema",
+      "Bash(xargs grep:*)",
+      "Bash(find /c/Users/yaniv/WixProjects/floaty-chat/node_modules/@wix/site -name \"*.d.ts\" -exec grep -l \"getSite\\\\|structure\\\\|pages\" {} \\\\;)",
+      "mcp__claude_ai_Wix__SearchWixRESTDocumentation"
+    ]
+  }
+}
