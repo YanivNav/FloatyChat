@@ -15,16 +15,14 @@ import { MessageBubble } from './components/MessageBubble';
 import styles from './chat-widget.module.scss';
 
 interface ChatAssistantProps {
-  botName?: string;
   primaryColor?: string;
-  greetingMessage?: string;
 }
 
 const ChatWidget: FC<ChatAssistantProps> = ({
-  botName = 'AI Assistant',
   primaryColor = '#116DFF',
-  greetingMessage = 'Hi! How can I help you today?',
 }) => {
+  const [botName, setBotName] = useState<string>('AI Assistant');
+  const [greetingMessage, setGreetingMessage] = useState<string>('Hi! How can I help you today?');
   const [isOpen, setIsOpen] = useState<boolean>(() => loadChatState()?.isOpen ?? false);
   const [messages, setMessages] = useState<Message[]>(() => loadChatState()?.messages ?? []);
   const [inputValue, setInputValue] = useState<string>('');
@@ -36,6 +34,16 @@ const ChatWidget: FC<ChatAssistantProps> = ({
   const [inEditor, setInEditor] = useState<boolean>(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    httpClient.fetchWithAuth(`${new URL(import.meta.url).origin}/api/settings`)
+      .then((res) => res.json())
+      .then((data: { botName?: string; greetingMessage?: string }) => {
+        if (data.botName) setBotName(data.botName);
+        if (data.greetingMessage) setGreetingMessage(data.greetingMessage);
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     siteWindow.viewMode()
@@ -322,9 +330,7 @@ async function readSSEStream(
 
 const customElement = reactToWebComponent(ChatWidget, React, ReactDOM, {
   props: {
-    botName: 'string',
     primaryColor: 'string',
-    greetingMessage: 'string',
   },
 });
 
