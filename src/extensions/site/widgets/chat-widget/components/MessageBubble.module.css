@@ -1,0 +1,24 @@
+.messageRow     { display: flex; }
+.messageRowUser { justify-content: flex-end; }
+.messageRowBot  { justify-content: flex-start; }
+
+.bubble {
+  max-width: 75%;
+  padding: 10px 14px;
+  font-size: 14px;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.userBubble {
+  border-radius: 18px 18px 4px 18px;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+.botBubble {
+  border-radius: 18px 18px 18px 4px;
+  background: #f0f0f0;
+  color: #1a1a2e;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+}

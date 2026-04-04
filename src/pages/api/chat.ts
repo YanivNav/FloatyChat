@@ -2,7 +2,7 @@ import type { APIRoute } from 'astro';
 import { siteProperties } from '@wix/business-tools';
 import { auth } from '@wix/essentials';
 import Anthropic from '@anthropic-ai/sdk';
-import { buildTools, executeSearchProducts, resolveVariantId, type Page, type FrontendAction } from './tools';
+import { buildTools, executeSearchProducts, resolveVariantId, toProductCard, type Page, type FrontendAction } from './tools';
 
 interface ConversationMessage {
   role: 'user' | 'assistant';
@@ -97,6 +97,9 @@ async function executeTool(
     const result = await executeSearchProducts(
       input as { query?: string; browse_all?: boolean; max_price?: number; limit?: number },
     );
+    if (result.found && Array.isArray(result.products) && result.products.length > 0) {
+      frontendActions.push({ type: 'show_products', products: result.products.map((p) => toProductCard(p as Record<string, unknown>)) });
+    }
     return makeResult(result);
   }
 

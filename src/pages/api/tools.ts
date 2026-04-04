@@ -11,6 +11,49 @@ export interface FrontendAction {
   [key: string]: unknown;
 }
 
+export interface ProductCard {
+  id: string;
+  name: string;
+  price: string;
+  imageUrl?: string;
+  slug: string;
+}
+
+export function toProductCard(product: Record<string, unknown>): ProductCard {
+  const id = String(product._id ?? '');
+  const name = String(product.name ?? '');
+  const slug = String(product.slug ?? '');
+
+  let price = '';
+  const priceRange = product.priceRange as Record<string, any> | undefined;
+  const actualPriceRange = product.actualPriceRange as Record<string, any> | undefined;
+  const priceData = product.priceData as Record<string, any> | undefined;
+  if (priceRange?.minValue?.formattedAmount) price = String(priceRange.minValue.formattedAmount);
+  else if (actualPriceRange?.minValue?.formattedAmount) price = String(actualPriceRange.minValue.formattedAmount);
+  else if (priceRange?.minValue?.amount != null) price = String(priceRange.minValue.amount);
+  else if (actualPriceRange?.minValue?.amount != null) price = String(actualPriceRange.minValue.amount);
+  else if (priceData?.formattedPrice) price = String(priceData.formattedPrice);
+  else if (priceData?.price != null) price = String(priceData.price);
+
+  const media = product.media as Record<string, any> | undefined;
+  const rawUrl: unknown = media?.mainMedia?.image?.url ?? media?.mainMedia?.thumbnail?.url ?? media?.items?.[0]?.image?.url;
+  let imageUrl: string | undefined;
+  if (rawUrl) {
+    const s = String(rawUrl);
+    if (s.startsWith('wix:image://v1/')) {
+      const [pathPart] = s.replace('wix:image://v1/', '').split('#');
+      const slashIdx = pathPart.indexOf('/');
+      const mediaId = slashIdx > -1 ? pathPart.slice(0, slashIdx) : pathPart;
+      const fileName = slashIdx > -1 ? pathPart.slice(slashIdx + 1) : 'image.jpg';
+      imageUrl = `https://static.wixstatic.com/media/${mediaId}/v1/fill/w_110,h_80,al_c,q_80,enc_avif/${fileName}`;
+    } else {
+      imageUrl = s;
+    }
+  }
+
+  return { id, name, price, imageUrl, slug };
+}
+
 interface SearchProductsInput {
   query?: string;
   max_price?: number;
