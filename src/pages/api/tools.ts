@@ -1,4 +1,4 @@
-import { catalogVersioning, products, productsV3 } from '@wix/stores';
+import { catalogVersioning, products, productsV3, readOnlyVariantsV3 } from '@wix/stores';
 import { auth } from '@wix/essentials';
 
 export interface Page {
@@ -169,6 +169,40 @@ export function buildTools(pages: Page[]) {
       },
     },
   ];
+}
+
+export async function resolveVariantId(
+  productId: string,
+  variantOptions: Record<string, string>,
+): Promise<string | undefined> {
+  try {
+    const { catalogVersion } = await auth.elevate(catalogVersioning.getCatalogVersion)();
+
+    if (catalogVersion === 'V3_CATALOG') {
+      const result = await auth.elevate(readOnlyVariantsV3.searchVariants)({
+        filter: { 'productData.productId': productId },
+        cursorPaging: { limit: 100 },
+      });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const variant = (result.variants as any[])?.find((v: any) =>
+        Object.entries(variantOptions).every(([optionName, choiceName]) =>
+          v.optionChoices?.some(
+            (c: any) =>
+              c.optionChoiceNames?.optionName?.toLowerCase() === optionName.toLowerCase() &&
+              c.optionChoiceNames?.choiceName?.toLowerCase() === choiceName.toLowerCase(),
+          ),
+        ),
+      );
+      return variant?._id ?? undefined;
+    }
+
+    const result = await auth.elevate(products.queryProductVariants)(productId, {
+      choices: variantOptions,
+    });
+    return result.variants?.[0]?._id ?? undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 export async function executeSearchProducts({

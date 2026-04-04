@@ -21,7 +21,7 @@ interface FrontendAction {
   product_id?: string;
   product_name?: string;
   quantity?: number;
-  variant_options?: Record<string, string>;
+  variant_id?: string;
 }
 
 const STORES_APP_ID = '215238eb-22a5-4c36-9e7b-e7c08025e04e';
@@ -164,9 +164,6 @@ const ChatWidget: FC<ChatAssistantProps> = ({
   const addToCart = useCallback(async (action: FrontendAction): Promise<void> => {
     const productId = action.product_id;
     const quantity = Math.max(1, Number(action.quantity ?? 1));
-    const variantOptions = action.variant_options && Object.keys(action.variant_options).length > 0
-      ? action.variant_options
-      : undefined;
 
     if (!productId) return;
 
@@ -176,13 +173,13 @@ const ChatWidget: FC<ChatAssistantProps> = ({
           catalogReference: {
             appId: STORES_APP_ID,
             catalogItemId: productId,
-            ...(variantOptions ? { options: variantOptions } : {}),
+            ...(action.variant_id ? { options: { variantId: action.variant_id } } : {}),
           },
           quantity,
         },
       ],
     });
-    await ecom.refreshCart()
+    ecom.refreshCart().catch(() => {});
   }, []);
 
   const checkout = useCallback(async (): Promise<void> => {
@@ -213,14 +210,17 @@ const ChatWidget: FC<ChatAssistantProps> = ({
     }
   }, [isOpen]);
 
-  const handleActions = useCallback((actions: FrontendAction[]): void => {
+  const handleActions = useCallback(async (actions: FrontendAction[]): Promise<void> => {
     for (const action of actions) {
       console.log('Executing action:', action);
       if (action.type === 'navigate_to_page' && action.url) {
         console.log(`Navigating to ${action.url}`);
         siteLocation.to(action.url);
+        return; // Assume navigation will unload the page, so stop executing further actions.
       } else if (action.type === 'add_to_cart') {
-        addToCart(action).catch(() => {
+        let failed = false;
+        await addToCart(action).catch(() => {
+          failed = true;
           setMessages((prev) => [
             ...prev,
             {
@@ -230,8 +230,9 @@ const ChatWidget: FC<ChatAssistantProps> = ({
             },
           ]);
         });
+        if (failed) return;
       } else if (action.type === 'proceed_to_checkout') {
-        checkout()
+        await checkout()
       }
     }
   }, [addToCart, checkout]);
@@ -240,7 +241,8 @@ const ChatWidget: FC<ChatAssistantProps> = ({
     setIsOpen((prev) => !prev);
   }, []);
 
-  const handleSend = useCallback((): void => {
+  const handleSend = useCallback(async (): Promise<void> => {
+    console.log('import meta', import.meta)
     const text = inputValue.trim();
     if (!text || isTyping) return;
 
@@ -261,41 +263,82 @@ const ChatWidget: FC<ChatAssistantProps> = ({
         content: m.text,
       }));
 
-    httpClient
-      .fetchWithAuth(`${new URL(import.meta.url).origin}/api/chat`, {
+    try {
+      const res = await httpClient.fetchWithAuth(`${new URL(import.meta.url).origin}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: text, history, pages }),
-      })
-      .then(async (res) => {
+      });
+
+      if (!res.body) {
         const data = await res.json() as { text?: string; actions?: FrontendAction[]; error?: string };
         setIsTyping(false);
-
-        const replyText = data.error
-          ? 'Sorry, something went wrong. Please try again.'
-          : (data.text ?? '');
-
-        setMessages((prev) => [
-          ...prev,
-          { id: `bot-${Date.now()}`, role: 'bot', text: replyText },
-        ]);
-
-        if (data.actions?.length) {
-          handleActions(data.actions);
-        }
-      })
-      .catch(() => {
         setMessages((prev) => [
           ...prev,
           {
-            id: `bot-err-${Date.now()}`,
+            id: `bot-${Date.now()}`,
             role: 'bot',
-            text: 'Sorry, something went wrong. Please try again.',
+            text: data.error ? 'Sorry, something went wrong. Please try again.' : (data.text ?? ''),
           },
         ]);
+        if (data.actions?.length) handleActions(data.actions);
+        return;
+      }
+
+      const pendingActions: FrontendAction[] = [];
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let isDone = false;
+
+      while (!isDone) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split('\n\n');
+        buffer = parts.pop() ?? '';
+
+        for (const part of parts) {
+          if (!part.startsWith('data: ')) continue;
+          let event: { type: string; text?: string; action?: FrontendAction };
+          try { event = JSON.parse(part.slice(6)); } catch { continue; }
+
+          if (event.type === 'action' && event.action) {
+            pendingActions.push(event.action);
+          } else if (event.type === 'done') {
+            setIsTyping(false);
+            setMessages((prev) => [
+              ...prev,
+              { id: `bot-${Date.now()}`, role: 'bot', text: event.text ?? '' },
+            ]);
+            if (pendingActions.length) handleActions(pendingActions);
+            isDone = true;
+            break;
+          } else if (event.type === 'error') {
+            setIsTyping(false);
+            setMessages((prev) => [
+              ...prev,
+              { id: `bot-err-${Date.now()}`, role: 'bot', text: 'Sorry, something went wrong. Please try again.' },
+            ]);
+            isDone = true;
+            break;
+          }
+        }
+      }
+
+      if (!isDone) {
         setIsTyping(false);
-      });
-  }, [inputValue, isTyping, messages, pages]);
+        if (pendingActions.length) handleActions(pendingActions);
+      }
+    } catch {
+      setMessages((prev) => [
+        ...prev,
+        { id: `bot-err-${Date.now()}`, role: 'bot', text: 'Sorry, something went wrong. Please try again.' },
+      ]);
+      setIsTyping(false);
+    }
+  }, [inputValue, isTyping, messages, pages, handleActions]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>): void => {
