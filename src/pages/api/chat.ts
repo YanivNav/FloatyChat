@@ -2,9 +2,10 @@ import type { APIRoute } from 'astro';
 import { siteProperties } from '@wix/business-tools';
 import { auth } from '@wix/essentials';
 import Anthropic from '@anthropic-ai/sdk';
-import { buildToolRegistry, type BackendTool, type SendFn, type ToolContext, type ToolExecutionResult, type Page, type ToolResult } from './tools';
+import { buildToolRegistry, type BackendTool, type SendFn, type ToolContext, type ToolResult } from './tools';
 import { initProductVersionHandler } from './store/product-version-handler';
-import type { FrontendAction } from '../../shared/types';
+import type { FrontendAction, VisitorContext } from '../../shared/types';
+import { site as wixSite } from "@wix/site-site";
 
 interface ConversationMessage {
   role: 'user' | 'assistant';
@@ -14,6 +15,7 @@ interface ConversationMessage {
 interface SendMessageRequest {
   message: string;
   history: ConversationMessage[];
+  context?: VisitorContext;
 }
 
 const FALLBACK_SYSTEM_PROMPT =
@@ -21,13 +23,16 @@ const FALLBACK_SYSTEM_PROMPT =
   Only answer questions related to this website and its business.
   If asked about unrelated topics, politely decline and offer to help with something relevant to this site instead.`;
 
-async function buildSystemPrompt(): Promise<string> {
+async function buildSystemPrompt(context?: VisitorContext): Promise<string> {
   try {
-    const result = await auth.elevate(siteProperties.getSiteProperties)({
+    const siteInfo = await auth.elevate(siteProperties.getSiteProperties)({
       fields: ['businessName', 'siteDisplayName', 'description', 'categories'],
     });
+    const siteStructure = await wixSite.getSiteStructure();
+    const pageDescriptions = siteStructure.pages.length > 0
+        ? siteStructure.pages.map((p) => `"${p.url}" (${p.name})`).join(', \n') : '';
 
-    const props = result.properties;
+    const props = siteInfo.properties;
     const name = props?.businessName || props?.siteDisplayName || 'this website';
     const description = props?.description;
     const category = props?.categories?.primary;
@@ -36,7 +41,29 @@ async function buildSystemPrompt(): Promise<string> {
     if (description) prompt += ` ${description}`;
     else if (category) prompt += ` This is a ${category} business.`;
 
-    prompt += `\n\nYour role is to help visitors with questions about ${name} - its products, services, content, and any information related to this site. Only answer questions relevant to this website and its business. If a visitor asks about something unrelated, politely decline and redirect them to how you can help with ${name}. When a visitor asks broad catalog questions like "what products do you sell?", "show me what you have", or asks for recommendations without an exact product name, call search_products with browse_all set to true. When the visitor gives attributes like color, use those words in query even if the exact product name is unknown. When adding a product to cart, include any variant choices the visitor mentioned or answered with in variant_options, using the exact choice names and values from the conversation. When navigating to a product page, provide the product_name from the user request and do not try to guess the slug yourself; the backend will search the catalog and resolve the final URL. After calling search_products, the results are shown as visual product cards — do NOT list or describe each product individually in your text response. Keep your text reply very short, e.g. "Here's what I found:" or "Here are some options for you:" and let the cards speak for themselves.`;
+    prompt += `\n\nYour role is to help visitors with questions about ${name} - its products, services, content, and any information related to this site. 
+      Only answer questions relevant to this website and its business. 
+      If a visitor asks about something unrelated, politely decline and redirect them to how you can help with ${name}.`;
+    
+    if (pageDescriptions) {
+      prompt += `\n\nThe site has the following pages: \n${pageDescriptions}.\n Use this information to help visitors navigate the site.`;
+    }
+
+    if (context?.page) {
+      prompt += `\n\nThe visitor is currently on: ${context.page.title} (${context.page.url}).`;
+      if (context.page.description) {
+        prompt += ` Page description: ${context.page.description}`;
+      }
+    }
+
+    if (context?.cart && context.cart.length > 0) {
+      const cartSummary = context.cart
+        .map((i) => `${i.quantity}x ${i.name}${i.variants ? ` (${i.variants})` : ''} — ${i.price}`)
+        .join(', ');
+      prompt += `\n\nTheir current cart contains: ${cartSummary}.`;
+    } else if (context?.cart) {
+      prompt += `\n\nTheir cart is currently empty.`;
+    }
 
     return prompt;
   } catch {
@@ -157,7 +184,7 @@ export const POST: APIRoute = async ({ request }) => {
     });
   }
 
-  const { message, history } = body;
+  const { message, history, context } = body;
   if (!message || typeof message !== 'string' || message.trim() === '') {
     return new Response(JSON.stringify({ error: 'message is required' }), {
       status: 400,
@@ -166,7 +193,7 @@ export const POST: APIRoute = async ({ request }) => {
   }
 
   await initProductVersionHandler();
-  const [systemPrompt, registry] = await Promise.all([buildSystemPrompt(), buildToolRegistry()]);
+  const [systemPrompt, registry] = await Promise.all([buildSystemPrompt(context), buildToolRegistry()]);
   const tools = Array.from(registry.values()).map((t) => t.schema);
 
   const initialMessages: Anthropic.MessageParam[] = [

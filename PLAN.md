@@ -239,6 +239,24 @@ src/
 
 ---
 
+## Next Features (Post-Current-State)
+
+### High impact, relatively straightforward
+- **Dashboard settings page** — Configure `botName`, `primaryColor`, `greetingMessage` from a dashboard UI and persist them. Currently just editor widget props. Needed for the app to feel complete for site owners. (Ties into V1 item 10.)
+- **Contextual greeting** — Use the page context (title/description) to make the opening message relevant, e.g. "I see you're looking at [product] — want to know more?" instead of a generic opener.
+- **Member context** — If the visitor is logged in (`@wix/members` / `@wix/identity`), pass their name and info to the bot for personalized responses.
+
+### More involved, high value
+- **Order history tool** — `get_order_status` backend tool using `@wix/ecom` orders API. "Where's my order?" is the most common e-commerce support question.
+- **CMS/content search tool** — `search_content` backend tool that queries Wix CMS collections (blog posts, FAQs, etc.) so the bot can answer questions beyond products. (Ties into V1 items 5 and 9.)
+
+### Polish / infrastructure
+- **Rate limiting** — `/api/chat` endpoint has no abuse protection.
+- **Conversation analytics** — Log conversations to a CMS collection so the site owner can see what visitors ask and where the bot falls short. (Ties into V1 item 10.)
+- **Clear chat button** — UX quality-of-life for visitors and for testing.
+
+---
+
 ## Out of Scope for V1
 
 - Multi-language support

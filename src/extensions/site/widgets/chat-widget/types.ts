@@ -1,6 +1,6 @@
 import type { ProductCard } from '../../../../shared/types';
 
-export type { ProductCard, FrontendAction } from '../../../../shared/types';
+export type { ProductCard, FrontendAction, PageInfo, CartItem, VisitorContext } from '../../../../shared/types';
 
 export interface Message {
   id: string;

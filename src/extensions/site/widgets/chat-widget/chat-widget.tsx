@@ -2,9 +2,10 @@ import React, { type FC, useState, useEffect, useRef, useCallback } from 'react'
 import ReactDOM from 'react-dom';
 import reactToWebComponent from 'react-to-webcomponent';
 import { location as siteLocation } from '@wix/site-location';
+import { currentCart } from '@wix/ecom';
 import { window as siteWindow } from '@wix/site-window';
 import { httpClient } from '@wix/essentials';
-import type { Message, FrontendAction, ProductCard } from './types';
+import type { Message, FrontendAction, ProductCard, PageInfo, CartItem, VisitorContext } from './types';
 import { handleActions as dispatchActions, addToCart } from './actions';
 import { loadChatState, saveChatState } from './utils/chatStorage';
 import { darkenColor } from './utils/colors';
@@ -94,10 +95,12 @@ const ChatWidget: FC<ChatAssistantProps> = ({
       }));
 
     try {
+      const [page, cart] = await Promise.all([getPageInfo(), getCartItems()]);
+      const context: VisitorContext = { page, cart };
       const res = await httpClient.fetchWithAuth(`${new URL(import.meta.url).origin}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text, history }),
+        body: JSON.stringify({ message: text, history, context }),
       });
 
       if (!res.body) {
@@ -245,6 +248,29 @@ const ChatWidget: FC<ChatAssistantProps> = ({
     </>
   );
 };
+
+async function getPageInfo(): Promise<PageInfo> {
+  const url = await siteLocation.url();
+  const title = document.title;
+  const description = document.querySelector('meta[name="description"]')?.getAttribute('content') ?? undefined;
+  return { url, title, description };
+}
+
+async function getCartItems(): Promise<CartItem[]> {
+  try {
+    const cart = await currentCart.getCurrentCart();
+    return (cart.lineItems ?? []).map((item) => ({
+      name: item.productName?.original ?? '',
+      quantity: item.quantity ?? 1,
+      price: item.price?.formattedAmount ?? (item.price as any)?.amount ?? '',
+      variants: item.descriptionLines
+        ?.map((l) => `${l.name?.original}: ${l.plainText?.original ?? l.colorInfo?.original ?? ''}`)
+        .join(', ') || undefined,
+    }));
+  } catch {
+    return [];
+  }
+}
 
 async function readSSEStream(
   body: ReadableStream<Uint8Array>,

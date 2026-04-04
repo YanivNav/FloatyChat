@@ -7,11 +7,28 @@ export interface ProductCard {
   slug: string;
 }
 
+export interface PageInfo {
+  url: string;
+  title: string;
+  description?: string;
+}
+
+export interface CartItem {
+  name: string;
+  quantity: number;
+  price: string;
+  variants?: string;
+}
+
+export interface VisitorContext {
+  page?: PageInfo;
+  cart?: CartItem[];
+}
+
 export interface ShowProductsAction {
   type: 'show_products';
   products: ProductCard[];
 }
-
 
 export interface AddToCartAction {
   type: 'add_to_cart';

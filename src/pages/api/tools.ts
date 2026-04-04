@@ -1,5 +1,4 @@
 import type Anthropic from "@anthropic-ai/sdk";
-import { site as wixSite } from "@wix/site-site";
 import { productVersionHandler } from './store/product-version-handler';
 import type { AddToCartAction, FrontendAction } from '../../shared/types';
 
@@ -95,7 +94,7 @@ const askClarificationTool: BackendTool<{ question: string }> = {
 const addToCartTool: BackendTool<AddToCartInput> = {
   schema: {
     name: 'add_to_cart',
-    description: "Add a product to the visitor's cart. By default, add 1 to the quantity. If the user specifies a different quantity, use that instead. If the product has options/variants and the visitor hasn't specified them, use ask_clarification first. When the visitor provides variant choices such as size or color, include them in variant_options using the exact choice names and values the visitor used.",
+    description: "Add a product to the visitor's cart. By default, add 1 to the quantity. If the user specifies a different quantity, use that instead. If the product has options/variants and the visitor hasn't specified them, use ask_clarification first. When the visitor provides variant choices such as size or color, include them in variant_options according to the available options the product has.",
     input_schema: {
       type: 'object',
       properties: {
@@ -152,36 +151,30 @@ const proceedToCheckoutTool: BackendTool = {
   },
 };
 
-const navigateToPageTool = async (): Promise<BackendTool<NavigateToPageInput>> => {
-  const structure = await wixSite.getSiteStructure()
-  const pageDescriptions = structure.pages.length > 0
-      ? structure.pages.map((p) => `"${p.url}" (${p.name})`).join(', ')
-      : 'unknown - do not use navigate_to_page if no pages are available';
-  return {
-    schema: {
-      name: 'navigate_to_page',
-      description: `Navigate the visitor to a page on the site. Available pages: ${pageDescriptions}. Use the URL from this list for ordinary pages. For product pages, first call search_products to find the exact product, then construct the page URL in the form of /product-page/{slug}.`,
-      input_schema: {
-        type: 'object',
-        properties: {
-          url: { type: 'string', description: 'The page URL to navigate to, e.g. "/shop" or "/about"' },
-          name: { type: 'string', description: 'The human-readable page name for confirmation messaging' },
-        },
-        required: ['url'],
+const navigateToPageTool: BackendTool<NavigateToPageInput> = {
+  schema: {
+    name: 'navigate_to_page',
+    description: `Navigate the visitor to a page on the site. Use the exact URL from the page list for ordinary pages. For product pages, first call search_products to find the exact product, then construct the page URL in the form of /product-page/{slug}.`,
+    input_schema: {
+      type: 'object',
+      properties: {
+        url: { type: 'string', description: 'The page URL to navigate to, e.g. "/shop" or "/about"' },
+        name: { type: 'string', description: 'The human-readable page name for confirmation messaging' },
       },
+      required: ['url'],
     },
-    execute: async (input, ctx) => {
-      ctx.frontendActions.push({ type: 'navigate_to_page', ...input });
-      return { success: true, resolvedUrl: input.url };
-    },
-  };
+  },
+  execute: async (input, ctx) => {
+    ctx.frontendActions.push({ type: 'navigate_to_page', ...input });
+    return { success: true, resolvedUrl: input.url };
+  },
 }
 
 export async function buildToolRegistry(): Promise<Map<string, BackendTool<any>>> {
   const tools: BackendTool<any>[] = [
     searchProductsTool,
     askClarificationTool,
-    await navigateToPageTool(),
+    navigateToPageTool,
     addToCartTool,
     proceedToCheckoutTool,
   ];
