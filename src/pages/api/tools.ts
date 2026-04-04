@@ -1,125 +1,31 @@
-import { catalogVersioning, products, productsV3, readOnlyVariantsV3 } from '@wix/stores';
-import { auth } from '@wix/essentials';
+import type Anthropic from "@anthropic-ai/sdk";
 
 export interface Page {
   name: string;
   url: string;
 }
 
-export interface FrontendAction {
-  type: string;
-  [key: string]: unknown;
-}
-
-export interface ProductCard {
-  id: string;
-  name: string;
-  price: string;
-  imageUrl?: string;
-  slug: string;
-}
-
-export function toProductCard(product: Record<string, unknown>): ProductCard {
-  const id = String(product._id ?? '');
-  const name = String(product.name ?? '');
-  const slug = String(product.slug ?? '');
-
-  let price = '';
-  const priceRange = product.priceRange as Record<string, any> | undefined;
-  const actualPriceRange = product.actualPriceRange as Record<string, any> | undefined;
-  const priceData = product.priceData as Record<string, any> | undefined;
-  if (priceRange?.minValue?.formattedAmount) price = String(priceRange.minValue.formattedAmount);
-  else if (actualPriceRange?.minValue?.formattedAmount) price = String(actualPriceRange.minValue.formattedAmount);
-  else if (priceRange?.minValue?.amount != null) price = String(priceRange.minValue.amount);
-  else if (actualPriceRange?.minValue?.amount != null) price = String(actualPriceRange.minValue.amount);
-  else if (priceData?.formattedPrice) price = String(priceData.formattedPrice);
-  else if (priceData?.price != null) price = String(priceData.price);
-
-  const media = product.media as Record<string, any> | undefined;
-  const rawUrl: unknown = media?.mainMedia?.image?.url ?? media?.mainMedia?.thumbnail?.url ?? media?.items?.[0]?.image?.url;
-  let imageUrl: string | undefined;
-  if (rawUrl) {
-    const s = String(rawUrl);
-    if (s.startsWith('wix:image://v1/')) {
-      const [pathPart] = s.replace('wix:image://v1/', '').split('#');
-      const slashIdx = pathPart.indexOf('/');
-      const mediaId = slashIdx > -1 ? pathPart.slice(0, slashIdx) : pathPart;
-      const fileName = slashIdx > -1 ? pathPart.slice(slashIdx + 1) : 'image.jpg';
-      imageUrl = `https://static.wixstatic.com/media/${mediaId}/v1/fill/w_110,h_80,al_c,q_80,enc_avif/${fileName}`;
-    } else {
-      imageUrl = s;
-    }
-  }
-
-  return { id, name, price, imageUrl, slug };
-}
-
-interface SearchProductsInput {
+export interface SearchProductsInput {
   query?: string;
+  browse_all: boolean;
   max_price?: number;
-  limit?: number;
-  browse_all?: boolean;
+  limit: number;
 }
 
-function normalizeText(value: unknown): string {
-  return String(value ?? '')
-    .toLowerCase()
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/[^\w\s]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+export interface NavigateToPageInput {
+  url: string;
+  name?: string;
+  product_slug?: string;
 }
 
-function tokenize(value: unknown): string[] {
-  return normalizeText(value)
-    .split(' ')
-    .filter((token) => token.length > 1);
+export interface AddToCartInput {
+  product_id?: string;
+  product_name?: string;
+  quantity?: number;
+  variant_options?: Record<string, string>;
 }
 
-function productSearchText(product: Record<string, unknown>): string {
-  return normalizeText([
-    product.name,
-    product.slug,
-    product.description,
-    product.plainDescription,
-    product.ribbon,
-  ].join(' '));
-}
-
-function scoreProduct(product: Record<string, unknown>, query: string): number {
-  const normalizedQuery = normalizeText(query);
-  if (!normalizedQuery) return 1;
-
-  const haystack = productSearchText(product);
-  const productName = normalizeText(product.name);
-  const queryTokens = tokenize(query);
-  let score = 0;
-
-  if (productName === normalizedQuery) score += 100;
-  if (productName.startsWith(normalizedQuery)) score += 60;
-  if (haystack.includes(normalizedQuery)) score += 40;
-
-  for (const token of queryTokens) {
-    if (productName.startsWith(token)) score += 15;
-    if (productName.includes(token)) score += 10;
-    if (haystack.includes(token)) score += 5;
-  }
-
-  return score;
-}
-
-function rankProducts<T extends Record<string, unknown>>(items: T[], query?: string): T[] {
-  const normalizedQuery = normalizeText(query);
-  if (!normalizedQuery) return items;
-
-  return [...items]
-    .map((product) => ({ product, score: scoreProduct(product, normalizedQuery) }))
-    .filter(({ score }) => score > 0)
-    .sort((a, b) => b.score - a.score)
-    .map(({ product }) => product);
-}
-
-export function buildTools(pages: Page[]) {
+export function buildTools(pages: Page[]): Anthropic.Tool[] {
   const pageDescriptions =
     pages.length > 0
       ? pages.map((p) => `"${p.url}" (${p.name})`).join(', ')
@@ -128,31 +34,27 @@ export function buildTools(pages: Page[]) {
   return [
     {
       name: 'search_products',
-      description:
-        'Search or browse the store catalog. Use this when the visitor asks about products, wants recommendations, asks what the store sells, or needs help finding an item even if they do not know the exact product name. For broad catalog questions like "what do you sell?" set browse_all to true.',
+      description: 'Search or browse the store catalog. Use this when the visitor asks about products, wants recommendations, asks what the store sells, or needs help finding an item even if they do not know the exact product name. For broad catalog questions like "what do you sell?" set browse_all to true. After using this tool the user will see the results as cards, so your text response should be very brief',
       input_schema: {
         type: 'object',
         properties: {
           query: {
             type: 'string',
-            description:
-              'Optional search phrase, e.g. "blue shirt", "running shoes", or "gift ideas". Leave empty when browsing the catalog generally.',
+            description: 'Optional search phrase, e.g. "blue shirt", "running shoes", or "gift ideas". Leave empty when browsing the catalog generally.',
           },
           browse_all: {
             type: 'boolean',
-            description:
-              'Set to true when the visitor wants to browse the catalog or asks general questions like "what products do you sell?"',
+            description: 'Set to true when the visitor wants to browse the catalog or asks general questions like "what products do you sell?"',
           },
           max_price: { type: 'number', description: 'Optional maximum price filter' },
           limit: { type: 'number', description: 'Max number of results to return, default 5' },
         },
-        required: [],
+        required: ['browse_all', 'limit'],
       },
     },
     {
       name: 'add_to_cart',
-      description:
-        "Add a product to the visitor's cart. By default, add 1 to the quantity. If the user specifies a different quantity, use that instead. If the product has options/variants and the visitor hasn't specified them, use ask_clarification first. When the visitor provides variant choices such as size or color, include them in variant_options using the exact choice names and values the visitor used.",
+      description: "Add a product to the visitor's cart. By default, add 1 to the quantity. If the user specifies a different quantity, use that instead. If the product has options/variants and the visitor hasn't specified them, use ask_clarification first. When the visitor provides variant choices such as size or color, include them in variant_options using the exact choice names and values the visitor used.",
       input_schema: {
         type: 'object',
         properties: {
@@ -161,8 +63,7 @@ export function buildTools(pages: Page[]) {
           quantity: { type: 'number', description: 'Quantity to add' },
           variant_options: {
             type: 'object',
-            description:
-              'Optional product variant selections, for example { "size": "M", "color": "White" }. Use only when the visitor specified variant choices.',
+            description: 'Optional product variant selections, for example { "size": "M", "color": "White" }. Use only when the visitor specified variant choices.',
             additionalProperties: { type: 'string' },
           },
         },
@@ -171,8 +72,7 @@ export function buildTools(pages: Page[]) {
     },
     {
       name: 'proceed_to_checkout',
-      description:
-        'Navigate the visitor to the checkout page. Only call this after the visitor explicitly confirms they want to check out.',
+      description: 'Navigate the visitor to the checkout page. Only call this after the visitor explicitly confirms they want to check out.',
       input_schema: {
         type: 'object',
         properties: {},
@@ -181,28 +81,22 @@ export function buildTools(pages: Page[]) {
     },
     {
       name: 'navigate_to_page',
-      description: `Navigate the visitor to a page on the site. Available pages: ${pageDescriptions}. Use the URL from this list for ordinary pages only. For product pages, first call search_products to find the exact product, then construct the page URL in the form of /product-page/{slug}.`,
+      description: `Navigate the visitor to a page on the site. Available pages: ${pageDescriptions}. Use the URL from this list for ordinary pages. For product pages, first call search_products to find the exact product, then construct the page URL in the form of /product-page/{slug}.`,
       input_schema: {
         type: 'object',
         properties: {
           url: {
             type: 'string',
-            description:
-              'The page URL to navigate to, e.g. "/shop" or "/about". Do not use this as "/product-page" for product navigation.',
+            description: 'The page URL to navigate to, e.g. "/shop" or "/about"',
           },
-          name: { type: 'string', description: 'The human-readable page name for confirmation messaging' },
-          product_slug: {
-            type: 'string',
-            description: 'Product slug used to navigate to product pages.',
-          },
+          name: { type: 'string', description: 'The human-readable page name for confirmation messaging' }
         },
         required: ['url'],
       },
     },
     {
       name: 'ask_clarification',
-      description:
-        'Ask the visitor a follow-up question before proceeding, e.g. to clarify size, color, or quantity.',
+      description: 'Ask the visitor a follow-up question before proceeding, e.g. to clarify size, color, or quantity.',
       input_schema: {
         type: 'object',
         properties: {
@@ -212,100 +106,4 @@ export function buildTools(pages: Page[]) {
       },
     },
   ];
-}
-
-export async function resolveVariantId(
-  productId: string,
-  variantOptions: Record<string, string>,
-): Promise<string | undefined> {
-  try {
-    const { catalogVersion } = await auth.elevate(catalogVersioning.getCatalogVersion)();
-
-    if (catalogVersion === 'V3_CATALOG') {
-      const result = await auth.elevate(readOnlyVariantsV3.searchVariants)({
-        filter: { 'productData.productId': productId },
-        cursorPaging: { limit: 100 },
-      });
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const variant = (result.variants as any[])?.find((v: any) =>
-        Object.entries(variantOptions).every(([optionName, choiceName]) =>
-          v.optionChoices?.some(
-            (c: any) =>
-              c.optionChoiceNames?.optionName?.toLowerCase() === optionName.toLowerCase() &&
-              c.optionChoiceNames?.choiceName?.toLowerCase() === choiceName.toLowerCase(),
-          ),
-        ),
-      );
-      return variant?._id ?? undefined;
-    }
-
-    const result = await auth.elevate(products.queryProductVariants)(productId, {
-      choices: variantOptions,
-    });
-    return result.variants?.[0]?._id ?? undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-export async function executeSearchProducts({
-  query,
-  max_price,
-  limit = 5,
-  browse_all = false,
-}: SearchProductsInput) {
-  try {
-    const { catalogVersion } = await auth.elevate(catalogVersioning.getCatalogVersion)();
-
-    if (catalogVersion === 'STORES_NOT_INSTALLED') {
-      return { found: false, message: 'No store is installed on this site.' };
-    }
-
-    const cap = Math.min(limit, 10);
-    const normalizedQuery = normalizeText(query);
-    const shouldBrowseAll = browse_all || normalizedQuery.length === 0;
-
-    if (catalogVersion === 'V3_CATALOG') {
-      const search: Parameters<typeof productsV3.searchProducts>[0] = {
-        cursorPaging: { limit: cap },
-      };
-      if (!shouldBrowseAll) {
-        search.search = { expression: normalizedQuery };
-      }
-      if (max_price != null) {
-        search.filter = { 'actualPriceRange.minValue.amount': { $lte: String(max_price) } };
-      }
-      const result = await auth.elevate(productsV3.searchProducts)(search);
-      if (!result.products?.length) return { found: false, message: 'No products found matching that query.' };
-
-      const rankedProducts = shouldBrowseAll
-        ? result.products.slice(0, cap)
-        : rankProducts(result.products as Record<string, unknown>[], normalizedQuery).slice(0, cap);
-
-      if (!rankedProducts.length) {
-        return { found: false, message: 'No products found matching that query.' };
-      }
-
-      return { found: true, mode: shouldBrowseAll ? 'browse' : 'search', products: rankedProducts };
-    }
-
-    let productQuery = products.queryProducts().limit(Math.max(cap * 5, 25));
-    if (max_price != null) productQuery = productQuery.le('priceData.price', max_price);
-    const result = await productQuery.find();
-
-    if (!result.items?.length) return { found: false, message: 'No products found matching that query.' };
-
-    const rankedProducts = shouldBrowseAll
-      ? result.items.slice(0, cap)
-      : rankProducts(result.items as Record<string, unknown>[], normalizedQuery).slice(0, cap);
-
-    if (!rankedProducts.length) {
-      return { found: false, message: 'No products found matching that query.' };
-    }
-
-    return { found: true, mode: shouldBrowseAll ? 'browse' : 'search', products: rankedProducts };
-  } catch (err) {
-    console.error('Error executing product search:', err);
-    return { found: false, message: `Search failed: ${(err as Error).message}` };
-  }
 }

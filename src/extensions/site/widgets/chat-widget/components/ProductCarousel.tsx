@@ -1,6 +1,6 @@
 import React, { type FC } from 'react';
 import type { ProductCard } from '../types';
-import styles from './ProductCarousel.module.css';
+import styles from '../chat-widget.module.scss';
 
 interface Props {
   products: ProductCard[];

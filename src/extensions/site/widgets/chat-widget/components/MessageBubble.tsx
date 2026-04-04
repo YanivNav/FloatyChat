@@ -1,7 +1,7 @@
 import React, { type FC } from 'react';
 import type { Message } from '../types';
 import { renderFormattedMessage } from '../utils/formatMessage';
-import styles from './MessageBubble.module.css';
+import styles from '../chat-widget.module.scss';
 
 interface Props {
   msg: Message;

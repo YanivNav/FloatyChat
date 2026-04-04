@@ -13,8 +13,7 @@ import { darkenColor } from './utils/colors';
 import { TypingIndicator } from './components/TypingIndicator';
 import { ProductCarousel } from './components/ProductCarousel';
 import { MessageBubble } from './components/MessageBubble';
-import widgetStyles from './chat-widget.module.css';
-import panelStyles from './chat-panel.module.css';
+import styles from './chat-widget.module.scss';
 
 const STORES_APP_ID = '215238eb-22a5-4c36-9e7b-e7c08025e04e';
 
@@ -41,8 +40,6 @@ const ChatWidget: FC<ChatAssistantProps> = ({
   const [pages, setPages] = useState<{ name: string; url: string }[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-
-  // ── Effects ────────────────────────────────────────────────────────────────
 
   useEffect(() => {
     siteWindow.viewMode()
@@ -74,8 +71,6 @@ const ChatWidget: FC<ChatAssistantProps> = ({
   useEffect(() => {
     if (isOpen) setTimeout(() => inputRef.current?.focus(), 300);
   }, [isOpen]);
-
-  // ── Cart & navigation ──────────────────────────────────────────────────────
 
   const addToCart = useCallback(async (action: FrontendAction): Promise<void> => {
     const productId = action.product_id;
@@ -111,8 +106,6 @@ const ChatWidget: FC<ChatAssistantProps> = ({
       ]));
   }, [addToCart]);
 
-  // ── Action handler ─────────────────────────────────────────────────────────
-
   const handleActions = useCallback(async (actions: FrontendAction[]): Promise<void> => {
     for (const action of actions) {
       if (action.type === 'show_products' && action.products?.length) {
@@ -138,8 +131,6 @@ const ChatWidget: FC<ChatAssistantProps> = ({
       }
     }
   }, [addToCart, checkout]);
-
-  // ── Send message ───────────────────────────────────────────────────────────
 
   const handleSend = useCallback(async (): Promise<void> => {
     const text = inputValue.trim();
@@ -195,12 +186,10 @@ const ChatWidget: FC<ChatAssistantProps> = ({
 
   const handleToggle = useCallback((): void => setIsOpen((prev) => !prev), []);
 
-  // ── Render methods ─────────────────────────────────────────────────────────
-
   function renderToggleButton() {
     return (
       <button
-        className={inEditor ? widgetStyles.toggleButtonEditor : widgetStyles.toggleButton}
+        className={inEditor ? styles.toggleButtonEditor : styles.toggleButton}
         onClick={inEditor ? undefined : handleToggle}
         aria-label={isOpen ? 'Close chat' : 'Open chat'}
         style={{ background: primaryColor }}
@@ -220,17 +209,17 @@ const ChatWidget: FC<ChatAssistantProps> = ({
 
   function renderHeader() {
     return (
-      <div className={panelStyles.header} style={{ background: primaryColor }}>
-        <div className={panelStyles.headerAvatar}>
+      <div className={styles.header} style={{ background: primaryColor }}>
+        <div className={styles.headerAvatar}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
             <path d="M20 2H4C2.9 2 2 2.9 2 4V22L6 18H20C21.1 18 22 17.1 22 16V4C22 2.9 21.1 2 20 2Z" fill="white" />
           </svg>
         </div>
-        <div className={panelStyles.headerInfo}>
-          <div className={panelStyles.headerName}>{botName}</div>
-          <div className={panelStyles.headerStatus}>Online</div>
+        <div className={styles.headerInfo}>
+          <div className={styles.headerName}>{botName}</div>
+          <div className={styles.headerStatus}>Online</div>
         </div>
-        <button onClick={handleToggle} aria-label="Close chat" className={panelStyles.headerCloseBtn}>
+        <button onClick={handleToggle} aria-label="Close chat" className={styles.headerCloseBtn}>
           <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
             <path d="M4 4L16 16M16 4L4 16" stroke="white" strokeWidth="2.2" strokeLinecap="round" />
           </svg>
@@ -241,7 +230,7 @@ const ChatWidget: FC<ChatAssistantProps> = ({
 
   function renderMessages() {
     return (
-      <div className={panelStyles.messagesThread}>
+      <div className={styles.messagesThread}>
         {messages.map((msg) =>
           msg.role === 'products' && msg.products ? (
             <ProductCarousel
@@ -264,10 +253,10 @@ const ChatWidget: FC<ChatAssistantProps> = ({
   function renderInputRow() {
     const disabled = !inputValue.trim() || isTyping;
     return (
-      <div className={panelStyles.inputRow}>
+      <div className={styles.inputRow}>
         <input
           ref={inputRef}
-          className={panelStyles.chatInput}
+          className={styles.chatInput}
           type="text"
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
@@ -276,7 +265,7 @@ const ChatWidget: FC<ChatAssistantProps> = ({
           disabled={isTyping}
         />
         <button
-          className={panelStyles.sendButton}
+          className={styles.sendButton}
           onClick={handleSend}
           disabled={disabled}
           aria-label="Send message"
@@ -293,17 +282,15 @@ const ChatWidget: FC<ChatAssistantProps> = ({
     );
   }
 
-  // ── Render ─────────────────────────────────────────────────────────────────
-
   return (
     <>
       <style>{`
-        .${panelStyles.chatInput}:focus { border-color: ${primaryColor}; box-shadow: 0 0 0 3px ${primaryColor}22; }
-        .${panelStyles.sendButton}:not(:disabled):hover { background: ${darkenColor(primaryColor, 20)} !important; }
+        .${styles.chatInput}:focus { border-color: ${primaryColor}; box-shadow: 0 0 0 3px ${primaryColor}22; }
+        .${styles.sendButton}:not(:disabled):hover { background: ${darkenColor(primaryColor, 20)} !important; }
       `}</style>
       {renderToggleButton()}
       {isOpen && !inEditor && (
-        <div className={panelStyles.panel}>
+        <div className={styles.panel}>
           {renderHeader()}
           {renderMessages()}
           {renderInputRow()}
@@ -312,8 +299,6 @@ const ChatWidget: FC<ChatAssistantProps> = ({
     </>
   );
 };
-
-// ── SSE stream reader ────────────────────────────────────────────────────────
 
 async function readSSEStream(
   body: ReadableStream<Uint8Array>,
@@ -362,8 +347,6 @@ async function readSSEStream(
     if (pendingActions.length) handleActions(pendingActions);
   }
 }
-
-// ── Web component registration ───────────────────────────────────────────────
 
 const customElement = reactToWebComponent(ChatWidget, React, ReactDOM, {
   props: {

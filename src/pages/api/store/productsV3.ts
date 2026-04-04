@@ -1,0 +1,67 @@
+import { productsV3, readOnlyVariantsV3 } from "@wix/stores";
+import { ProductVersionHandler, type ProductSearchResult } from "./product-version-handler";
+import { normalizeText } from "../utils";
+import { rankProducts } from "./store-helper";
+import { auth } from "@wix/essentials";
+import type { ProductCard } from "../../../shared/types";
+import type { SearchProductsInput } from "../tools";
+
+export class ProductsV3Handler extends ProductVersionHandler<productsV3.V3Product> {
+  async searchProducts(params: SearchProductsInput): Promise<ProductSearchResult> {
+    const normalizedQuery = normalizeText(params.query);
+    const shouldBrowseAll = params.browse_all || normalizedQuery.length === 0;
+
+    const search: productsV3.V3ProductSearch = {
+      cursorPaging: { limit: params.limit }
+    };
+    if (!shouldBrowseAll) {
+      search.search = { expression: normalizedQuery };
+    }
+    if (params.max_price != null) {
+      search.filter = { 'actualPriceRange.minValue.amount': { $lte: String(params.max_price) } };
+    }
+    const result = await auth.elevate(productsV3.searchProducts)(search, {fields: ['URL', 'CURRENCY', 'PLAIN_DESCRIPTION', 'ALL_CATEGORIES_INFO', 'THUMBNAIL']});
+    if (!result.products?.length) return { found: false, message: 'No products found matching that query.' };
+
+    const rankedProducts = shouldBrowseAll
+      ? result.products.slice(0, params.limit)
+      : rankProducts(result.products as Record<string, unknown>[], normalizedQuery).slice(0, params.limit) as productsV3.V3Product[];
+
+    if (!rankedProducts.length) {
+      return { found: false, message: 'No products found matching that query.' };
+    }
+
+    return { found: true, mode: shouldBrowseAll ? 'browse' : 'search', products: rankedProducts };
+  }
+
+  toProductCard(product: productsV3.V3Product): ProductCard {
+    return {
+      id: product._id!,
+      name: product.name!,
+      price: product.actualPriceRange?.minValue?.formattedAmount ? product.actualPriceRange.minValue.formattedAmount : 'Price not available',
+      imageUrl: product.media?.main?.thumbnail?.url,
+      slug: product.slug!,
+      url: product.url!
+    };
+  }
+
+  async resolveVariantId(productId: string, variantOptions: Record<string, string>): Promise<string | undefined> {
+    const result = await auth.elevate(readOnlyVariantsV3.queryVariants)({
+      filter: { 'productData.productId': productId },
+      cursorPaging: { limit: 100 },
+    });
+    const variant = result.variants?.find((v) =>
+      Object.entries(variantOptions).every(([optionName, choiceName]) =>
+        v.optionChoices?.some(
+          (c) =>
+            c.optionChoiceNames?.optionName?.toLowerCase() === optionName.toLowerCase() &&
+            c.optionChoiceNames?.choiceName?.toLowerCase() === choiceName.toLowerCase(),
+        ),
+      ),
+    );
+    return variant?._id ?? undefined;
+  }
+  
+}
+
+export const productsV3Handler = new ProductsV3Handler();

@@ -1,5 +1,5 @@
 import React, { type FC } from 'react';
-import styles from './TypingIndicator.module.css';
+import styles from '../chat-widget.module.scss';
 
 export const TypingIndicator: FC = () => (
   <div className={`${styles.messageRow} ${styles.messageRowBot}`}>
