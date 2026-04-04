@@ -183,28 +183,11 @@ Instead of returning plain text, Claude can call structured "tools" that your ba
 
 Wix enforces a 14-second timeout on frontend→backend function calls. Claude API calls with tool use can easily exceed this. The solution:
 
-```
-Widget (frontend)
-  │
-  ├─► calls backend function → backend immediately returns { status: "ok", channelId }
-  │
-  ├─► subscribes to wixRealtime channel: `chat-${sessionId}`
-  │
-  └─► renders tokens as they arrive on the channel
-
-Backend (async, no timeout pressure)
-  │
-  ├─► calls Claude API
-  ├─► executes tool calls
-  ├─► publishes each response chunk to wixRealtime channel
-  └─► publishes { type: "done" } when complete
-```
-
----
+Use http streams
 
 ## Key Technical Notes
 
-- **Claude API key** — store in Wix Secrets Manager, access via `wixSecretsBackend`
+- **Claude API key** — store in environment variables
 - **Navigation from widget** — the widget is a native Wix component (not an iframe), so `wixLocation.to()` and `wixWindow` APIs work directly from widget frontend code
 - **Cart operations** — use `wixStoresBackend` from backend functions, not frontend
 - **Checkout** — use `wixLocation.to("/checkout")` from widget frontend after cart is confirmed
@@ -216,13 +199,13 @@ Backend (async, no timeout pressure)
 ## V1 Build Order
 
 1. **Project scaffold** — Wix CLI app created, dev site running ✅
-2. **Chat widget UI** — floating button, expandable panel, message thread, input box
-3. **Backend scaffolding** — backend function that calls Claude and returns a basic text response
+2. **Chat widget UI** — floating button, expandable panel, message thread, input box ✅
+3. **Backend scaffolding** — backend function that calls Claude and returns a basic text response ✅
 4. **wixRealtime streaming** — wire up pub/sub so response streams token by token
 5. **Knowledge base (FAQ)** — CMS collection for Q&A pairs, basic retrieval
-6. **Product search** — `search_products` tool wired to Wix Stores API
-7. **Add to cart** — `add_to_cart` tool wired to `wixStoresBackend`
-8. **Checkout flow** — clarification handler + `proceed_to_checkout` tool
+6. **Product search** — `search_products` tool wired to Wix Stores API ✅
+7. **Add to cart** — `add_to_cart` tool wired to `wixStoresBackend` ✅
+8. **Checkout flow** — clarification handler + `proceed_to_checkout` tool ✅
 9. **Site crawler** — index pages and products into vector store
 10. **Owner dashboard** — settings page, knowledge editor, analytics
 11. **Monetization gates** — enforce chat limits per tier

@@ -109,13 +109,19 @@ export function buildTools(pages: Page[]) {
     {
       name: 'add_to_cart',
       description:
-        "Add a product to the visitor's cart. Only call this after confirming which product and quantity the visitor wants. If the product has options/variants and the visitor hasn't specified them, use ask_clarification first.",
+        "Add a product to the visitor's cart. By default, add 1 to the quantity. If the user specifies a different quantity, use that instead. If the product has options/variants and the visitor hasn't specified them, use ask_clarification first. When the visitor provides variant choices such as size or color, include them in variant_options using the exact choice names and values the visitor used.",
       input_schema: {
         type: 'object',
         properties: {
           product_id: { type: 'string', description: 'The product ID from search results' },
           product_name: { type: 'string', description: 'The product name, for confirmation messaging' },
           quantity: { type: 'number', description: 'Quantity to add' },
+          variant_options: {
+            type: 'object',
+            description:
+              'Optional product variant selections, for example { "size": "M", "color": "White" }. Use only when the visitor specified variant choices.',
+            additionalProperties: { type: 'string' },
+          },
         },
         required: ['product_id', 'product_name', 'quantity'],
       },
@@ -132,19 +138,19 @@ export function buildTools(pages: Page[]) {
     },
     {
       name: 'navigate_to_page',
-      description: `Navigate the visitor to a page on the site. Available pages: ${pageDescriptions}. Use the URL from this list. For product pages, provide the product_name from the user's request (for example, "blue shirt") and let the backend search the catalog and resolve the final product URL.`,
+      description: `Navigate the visitor to a page on the site. Available pages: ${pageDescriptions}. Use the URL from this list for ordinary pages only. For product pages, first call search_products to find the exact product, then construct the page URL in the form of /product-page/{slug}.`,
       input_schema: {
         type: 'object',
         properties: {
-          url: { type: 'string', description: 'The page URL to navigate to, e.g. "/shop" or "/about"' },
-          name: { type: 'string', description: 'The human-readable page name for confirmation messaging' },
-          product_id: {
+          url: {
             type: 'string',
-            description: 'Optional product ID from a product search result.',
+            description:
+              'The page URL to navigate to, e.g. "/shop" or "/about". Do not use this as "/product-page" for product navigation.',
           },
-          product_name: {
+          name: { type: 'string', description: 'The human-readable page name for confirmation messaging' },
+          product_slug: {
             type: 'string',
-            description: 'Optional product phrase or product name used to search the catalog and resolve a product page.',
+            description: 'Product slug used to navigate to product pages.',
           },
         },
         required: ['url'],

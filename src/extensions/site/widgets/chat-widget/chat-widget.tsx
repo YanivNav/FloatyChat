@@ -1,6 +1,8 @@
 import React, { type FC, useState, useEffect, useRef, useCallback } from 'react';
 import ReactDOM from 'react-dom';
 import reactToWebComponent from 'react-to-webcomponent';
+import { currentCart } from '@wix/ecom';
+import { ecom } from '@wix/site-ecom';
 import { location as siteLocation } from '@wix/site-location';
 import { window as siteWindow } from '@wix/site-window';
 import { site as wixSite } from '@wix/site-site';
@@ -19,7 +21,10 @@ interface FrontendAction {
   product_id?: string;
   product_name?: string;
   quantity?: number;
+  variant_options?: Record<string, string>;
 }
+
+const STORES_APP_ID = '215238eb-22a5-4c36-9e7b-e7c08025e04e';
 
 interface ChatAssistantProps {
   botName?: string;
@@ -156,6 +161,35 @@ const ChatWidget: FC<ChatAssistantProps> = ({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, []);
 
+  const addToCart = useCallback(async (action: FrontendAction): Promise<void> => {
+    const productId = action.product_id;
+    const quantity = Math.max(1, Number(action.quantity ?? 1));
+    const variantOptions = action.variant_options && Object.keys(action.variant_options).length > 0
+      ? action.variant_options
+      : undefined;
+
+    if (!productId) return;
+
+    await currentCart.addToCurrentCart({
+      lineItems: [
+        {
+          catalogReference: {
+            appId: STORES_APP_ID,
+            catalogItemId: productId,
+            ...(variantOptions ? { options: variantOptions } : {}),
+          },
+          quantity,
+        },
+      ],
+    });
+    await ecom.refreshCart()
+  }, []);
+
+  const checkout = useCallback(async (): Promise<void> => {
+    const res = await currentCart.createCheckoutFromCurrentCart()
+    await ecom.navigateToCheckoutPage(res.checkoutId!);
+  }, []);
+
   useEffect(() => {
     if (isOpen && !hasGreeted) {
       setMessages([
@@ -181,14 +215,26 @@ const ChatWidget: FC<ChatAssistantProps> = ({
 
   const handleActions = useCallback((actions: FrontendAction[]): void => {
     for (const action of actions) {
+      console.log('Executing action:', action);
       if (action.type === 'navigate_to_page' && action.url) {
-        void siteLocation.to(action.url);
+        console.log(`Navigating to ${action.url}`);
+        siteLocation.to(action.url);
+      } else if (action.type === 'add_to_cart') {
+        addToCart(action).catch(() => {
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: `bot-cart-err-${Date.now()}`,
+              role: 'bot',
+              text: 'Sorry, I could not add that item to your cart.',
+            },
+          ]);
+        });
       } else if (action.type === 'proceed_to_checkout') {
-        void siteLocation.to('/checkout');
+        checkout()
       }
-      // add_to_cart: handled via custom event for page-level cart integration
     }
-  }, []);
+  }, [addToCart, checkout]);
 
   const handleToggle = useCallback((): void => {
     setIsOpen((prev) => !prev);
