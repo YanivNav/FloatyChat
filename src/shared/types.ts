@@ -7,13 +7,28 @@ export interface ProductCard {
   slug: string;
 }
 
-export interface FrontendAction {
-  type: string;
-  url?: string;
+export interface ShowProductsAction {
+  type: 'show_products';
+  products: ProductCard[];
+}
+
+
+export interface AddToCartAction {
+  type: 'add_to_cart';
   product_id?: string;
   product_name?: string;
   quantity?: number;
   variant_id?: string;
-  products?: ProductCard[];
-  [key: string]: unknown;
 }
+
+export interface NavigateToPageAction {
+  type: 'navigate_to_page';
+  url: string;
+  name?: string;
+}
+
+export interface CheckoutAction {
+  type: 'proceed_to_checkout';
+}
+
+export type FrontendAction = ShowProductsAction | AddToCartAction | NavigateToPageAction | CheckoutAction;

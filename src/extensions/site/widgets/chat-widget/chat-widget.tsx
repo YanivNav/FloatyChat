@@ -1,21 +1,17 @@
 import React, { type FC, useState, useEffect, useRef, useCallback } from 'react';
 import ReactDOM from 'react-dom';
 import reactToWebComponent from 'react-to-webcomponent';
-import { currentCart } from '@wix/ecom';
-import { ecom } from '@wix/site-ecom';
 import { location as siteLocation } from '@wix/site-location';
 import { window as siteWindow } from '@wix/site-window';
-import { site as wixSite } from '@wix/site-site';
 import { httpClient } from '@wix/essentials';
 import type { Message, FrontendAction, ProductCard } from './types';
+import { handleActions as dispatchActions, addToCart } from './actions';
 import { loadChatState, saveChatState } from './utils/chatStorage';
 import { darkenColor } from './utils/colors';
 import { TypingIndicator } from './components/TypingIndicator';
 import { ProductCarousel } from './components/ProductCarousel';
 import { MessageBubble } from './components/MessageBubble';
 import styles from './chat-widget.module.scss';
-
-const STORES_APP_ID = '215238eb-22a5-4c36-9e7b-e7c08025e04e';
 
 interface ChatAssistantProps {
   botName?: string;
@@ -37,7 +33,6 @@ const ChatWidget: FC<ChatAssistantProps> = ({
     return restored?.hasGreeted ?? (restored?.messages.length ?? 0) > 0;
   });
   const [inEditor, setInEditor] = useState<boolean>(false);
-  const [pages, setPages] = useState<{ name: string; url: string }[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -45,12 +40,6 @@ const ChatWidget: FC<ChatAssistantProps> = ({
     siteWindow.viewMode()
       .then((mode) => setInEditor(mode === 'Editor'))
       .catch(() => setInEditor(!!(window as any).Wix));
-  }, []);
-
-  useEffect(() => {
-    wixSite.getSiteStructure()
-      .then((structure) => setPages(structure.pages?.map((p) => ({ name: p.name, url: p.url! })) ?? []))
-      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -72,26 +61,8 @@ const ChatWidget: FC<ChatAssistantProps> = ({
     if (isOpen) setTimeout(() => inputRef.current?.focus(), 300);
   }, [isOpen]);
 
-  const addToCart = useCallback(async (action: FrontendAction): Promise<void> => {
-    const productId = action.product_id;
-    if (!productId) return;
-
-    await currentCart.addToCurrentCart({
-      lineItems: [{
-        catalogReference: {
-          appId: STORES_APP_ID,
-          catalogItemId: productId,
-          ...(action.variant_id ? { options: { variantId: action.variant_id } } : {}),
-        },
-        quantity: Math.max(1, Number(action.quantity ?? 1)),
-      }],
-    });
-    await ecom.refreshCart().catch(() => {});
-  }, []);
-
-  const checkout = useCallback(async (): Promise<void> => {
-    const res = await currentCart.createCheckoutFromCurrentCart();
-    await ecom.navigateToCheckoutPage(res.checkoutId!);
+  const addMessage = useCallback((message: Message): void => {
+    setMessages((prev) => [...prev, message]);
   }, []);
 
   const navigateToProduct = useCallback((slug: string): void => {
@@ -99,44 +70,19 @@ const ChatWidget: FC<ChatAssistantProps> = ({
   }, []);
 
   const handleProductAddToCart = useCallback(async (product: ProductCard): Promise<void> => {
-    await addToCart({ type: 'add_to_cart', product_id: product.id, product_name: product.name })
-      .catch(() => setMessages((prev) => [
-        ...prev,
-        { id: `bot-cart-err-${Date.now()}`, role: 'bot', text: `Sorry, I couldn't add ${product.name} to your cart.` },
-      ]));
-  }, [addToCart]);
+    await addToCart(product.id)
+      .catch(() => addMessage({ id: `bot-cart-err-${Date.now()}`, role: 'bot', text: `Sorry, I couldn't add ${product.name} to your cart.` }));
+  }, [addMessage]);
 
-  const handleActions = useCallback(async (actions: FrontendAction[]): Promise<void> => {
-    for (const action of actions) {
-      if (action.type === 'show_products' && action.products?.length) {
-        setMessages((prev) => [
-          ...prev,
-          { id: `products-${Date.now()}`, role: 'products', text: '', products: action.products },
-        ]);
-      } else if (action.type === 'navigate_to_page' && action.url) {
-        siteLocation.to(action.url);
-        return;
-      } else if (action.type === 'add_to_cart') {
-        let failed = false;
-        await addToCart(action).catch(() => {
-          failed = true;
-          setMessages((prev) => [
-            ...prev,
-            { id: `bot-cart-err-${Date.now()}`, role: 'bot', text: 'Sorry, I could not add that item to your cart.' },
-          ]);
-        });
-        if (failed) return;
-      } else if (action.type === 'proceed_to_checkout') {
-        await checkout();
-      }
-    }
-  }, [addToCart, checkout]);
+  const handleActions = useCallback((actions: FrontendAction[]): Promise<void> => {
+    return dispatchActions(actions, { addMessage });
+  }, [addMessage]);
 
   const handleSend = useCallback(async (): Promise<void> => {
     const text = inputValue.trim();
     if (!text || isTyping) return;
 
-    setMessages((prev) => [...prev, { id: `user-${Date.now()}`, role: 'user', text }]);
+    addMessage({ id: `user-${Date.now()}`, role: 'user', text });
     setInputValue('');
     setIsTyping(true);
 
@@ -151,31 +97,31 @@ const ChatWidget: FC<ChatAssistantProps> = ({
       const res = await httpClient.fetchWithAuth(`${new URL(import.meta.url).origin}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text, history, pages }),
+        body: JSON.stringify({ message: text, history }),
       });
 
       if (!res.body) {
         const data = await res.json() as { text?: string; actions?: FrontendAction[]; error?: string };
         setIsTyping(false);
-        setMessages((prev) => [...prev, {
+        addMessage({
           id: `bot-${Date.now()}`,
           role: 'bot',
           text: data.error ? 'Sorry, something went wrong. Please try again.' : (data.text ?? ''),
-        }]);
+        });
         if (data.actions?.length) handleActions(data.actions);
         return;
       }
 
-      await readSSEStream(res.body, handleActions, setIsTyping, setMessages);
+      await readSSEStream(res.body, handleActions, setIsTyping, addMessage);
     } catch {
-      setMessages((prev) => [...prev, {
+      addMessage({
         id: `bot-err-${Date.now()}`,
         role: 'bot',
         text: 'Sorry, something went wrong. Please try again.',
-      }]);
+      });
       setIsTyping(false);
     }
-  }, [inputValue, isTyping, messages, pages, handleActions]);
+  }, [inputValue, isTyping, messages, handleActions]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>): void => {
@@ -304,7 +250,7 @@ async function readSSEStream(
   body: ReadableStream<Uint8Array>,
   handleActions: (actions: FrontendAction[]) => Promise<void>,
   setIsTyping: React.Dispatch<React.SetStateAction<boolean>>,
-  setMessages: React.Dispatch<React.SetStateAction<Message[]>>,
+  addMessage: (message: Message) => void,
 ): Promise<void> {
   const pendingActions: FrontendAction[] = [];
   const reader = body.getReader();
@@ -329,13 +275,13 @@ async function readSSEStream(
         pendingActions.push(event.action);
       } else if (event.type === 'done') {
         setIsTyping(false);
-        setMessages((prev) => [...prev, { id: `bot-${Date.now()}`, role: 'bot', text: event.text ?? '' }]);
+        addMessage({ id: `bot-${Date.now()}`, role: 'bot', text: event.text ?? '' });
         if (pendingActions.length) handleActions(pendingActions);
         isDone = true;
         break;
       } else if (event.type === 'error') {
         setIsTyping(false);
-        setMessages((prev) => [...prev, { id: `bot-err-${Date.now()}`, role: 'bot', text: 'Sorry, something went wrong. Please try again.' }]);
+        addMessage({ id: `bot-err-${Date.now()}`, role: 'bot', text: 'Sorry, something went wrong. Please try again.' });
         isDone = true;
         break;
       }

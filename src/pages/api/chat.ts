@@ -2,8 +2,8 @@ import type { APIRoute } from 'astro';
 import { siteProperties } from '@wix/business-tools';
 import { auth } from '@wix/essentials';
 import Anthropic from '@anthropic-ai/sdk';
-import { buildTools, type AddToCartInput, type NavigateToPageInput, type Page, type SearchProductsInput } from './tools';
-import { initProductVersionHandler, productVersionHandler } from './store/product-version-handler';
+import { buildToolRegistry, type BackendTool, type SendFn, type ToolContext, type ToolExecutionResult, type Page, type ToolResult } from './tools';
+import { initProductVersionHandler } from './store/product-version-handler';
 import type { FrontendAction } from '../../shared/types';
 
 interface ConversationMessage {
@@ -14,19 +14,11 @@ interface ConversationMessage {
 interface SendMessageRequest {
   message: string;
   history: ConversationMessage[];
-  pages?: Page[];
 }
 
-
-type SendFn = (event: object) => void;
-
-type ToolExecutionResult =
-  | { earlyExit: false; toolResult: Anthropic.ToolResultBlockParam }
-  | { earlyExit: true };
-
 const FALLBACK_SYSTEM_PROMPT =
-  `You are a helpful AI assistant for this website. 
-  Only answer questions related to this website and its business. 
+  `You are a helpful AI assistant for this website.
+  Only answer questions related to this website and its business.
   If asked about unrelated topics, politely decline and offer to help with something relevant to this site instead.`;
 
 async function buildSystemPrompt(): Promise<string> {
@@ -52,65 +44,22 @@ async function buildSystemPrompt(): Promise<string> {
   }
 }
 
-
 async function executeTool(
   id: string,
   name: string,
   input: unknown,
-  frontendActions: FrontendAction[],
-  send: SendFn,
-): Promise<ToolExecutionResult> {
-  const makeResult = (content: unknown): ToolExecutionResult => ({
-    earlyExit: false,
-    toolResult: { type: 'tool_result', tool_use_id: id, content: JSON.stringify(content) },
-  });
-
-  if (name === 'search_products') {
-    const result = await productVersionHandler.searchProducts(input as SearchProductsInput);
-    if (result.found && Array.isArray(result.products) && result.products.length > 0) {
-      frontendActions.push({ type: 'show_products', products: result.products.map((p) => productVersionHandler.toProductCard(p)) });
-    }
-    return makeResult(result);
+  registry: Map<string, BackendTool<any>>,
+  ctx: ToolContext,
+): Promise<ToolResult> {
+  const tool = registry.get(name);
+  if (!tool) {
+    return { earlyExit: false, result: { type: 'tool_result', tool_use_id: id, content: JSON.stringify({ error: `Unknown tool: ${name}` }) } };
   }
-
-  if (name === 'ask_clarification') {
-    send({ type: 'token', text: (input as { question: string }).question });
-    return { earlyExit: true };
+  const res = await tool.execute(input, ctx);
+  if (res.earlyExit) {
+    return { earlyExit: true }
   }
-
-  if (name === 'navigate_to_page') {
-    const { url, ...rest } = input as NavigateToPageInput;
-    frontendActions.push({ type: name, ...rest, url });
-    return makeResult({ success: true, resolvedUrl: url });
-  }
-
-  if (name === 'add_to_cart') {
-    const cartInput = input as AddToCartInput;
-    const results = await productVersionHandler.resolveCartProduct(cartInput);
-
-    if (!results.found || results.products.length === 0) {
-      return makeResult({ success: false, message: 'Could not find the product to add to cart.' });
-    }
-    const product = results.products[0]!;
-
-    let variantId: string | undefined;
-    if (cartInput.variant_options && Object.keys(cartInput.variant_options).length > 0) {
-      variantId = await productVersionHandler.resolveVariantId(product._id!, cartInput.variant_options);
-    }
-
-    const action: FrontendAction = {
-      type: name,
-      product_id: product._id!,
-      product_name: product.name ?? cartInput.product_name ?? product._id!,
-      quantity: cartInput.quantity ?? 1,
-      variant_id: variantId,
-    };
-    frontendActions.push(action);
-    return makeResult({ success: true, ...action });
-  }
-
-  frontendActions.push({ type: name, ...(input as Record<string, unknown>) });
-  return makeResult({ success: true });
+  return { earlyExit: false, result: { type: 'tool_result', tool_use_id: id, content: JSON.stringify(res) } };
 }
 
 async function runAgentLoop(
@@ -118,6 +67,7 @@ async function runAgentLoop(
   messages: Anthropic.MessageParam[],
   systemPrompt: string,
   tools: Anthropic.Tool[],
+  registry: Map<string, BackendTool<any>>,
   send: SendFn,
 ): Promise<void> {
   const frontendActions: FrontendAction[] = [];
@@ -151,12 +101,17 @@ async function runAgentLoop(
 
     const toolResults: Anthropic.ToolResultBlockParam[] = [];
     let earlyExit = false;
+    const ctx: ToolContext = { frontendActions, send };
 
     for (const block of response.content) {
       if (block.type !== 'tool_use') continue;
-      const result = await executeTool(block.id, block.name, block.input, frontendActions, send);
-      if (result.earlyExit) { finalText = iterationText; earlyExit = true; break; }
-      toolResults.push(result.toolResult);
+      const result = await executeTool(block.id, block.name, block.input, registry, ctx);
+      if (result.earlyExit) {
+        finalText = iterationText; 
+        earlyExit = true; break;
+      } else {
+        toolResults.push(result.result);
+      }
     }
 
     if (earlyExit) break;
@@ -202,7 +157,7 @@ export const POST: APIRoute = async ({ request }) => {
     });
   }
 
-  const { message, history, pages = [] } = body;
+  const { message, history } = body;
   if (!message || typeof message !== 'string' || message.trim() === '') {
     return new Response(JSON.stringify({ error: 'message is required' }), {
       status: 400,
@@ -211,9 +166,8 @@ export const POST: APIRoute = async ({ request }) => {
   }
 
   await initProductVersionHandler();
-
-  const apiKey: string = import.meta.env.CLAUDE_API_KEY || '';
-  const [systemPrompt, tools] = await Promise.all([buildSystemPrompt(), Promise.resolve(buildTools(pages))]);
+  const [systemPrompt, registry] = await Promise.all([buildSystemPrompt(), buildToolRegistry()]);
+  const tools = Array.from(registry.values()).map((t) => t.schema);
 
   const initialMessages: Anthropic.MessageParam[] = [
     ...(history ?? []).map((h) => ({ role: h.role, content: h.content as string })),
@@ -221,8 +175,7 @@ export const POST: APIRoute = async ({ request }) => {
   ];
 
   return createSSEResponse(async (send) => {
-    const client = new Anthropic({ apiKey });
-    await runAgentLoop(client, initialMessages, systemPrompt, tools as Anthropic.Tool[], send);
+    const client = new Anthropic({ apiKey: import.meta.env.CLAUDE_API_KEY || '' });
+    await runAgentLoop(client, initialMessages, systemPrompt, tools, registry, send);
   });
 };
-
