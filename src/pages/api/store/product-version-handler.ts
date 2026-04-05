@@ -5,7 +5,7 @@ import type { AddToCartInput, SearchProductsInput } from '../tools';
 
 export type ProductSearchResult =
   { found: false, message: string } |
-  { found: true, mode: 'search' | 'browse', products: (products.Product[] | productsV3.V3Product[]) };
+  { found: true, mode: 'search' | 'browse', products: (products.Product[] | productsV3.V3Product[]), hasNext?: boolean, pageSize?: number };
 
 
 export abstract class ProductVersionHandler<P> {

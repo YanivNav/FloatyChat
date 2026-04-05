@@ -1,21 +1,18 @@
 import { productsV3, readOnlyVariantsV3 } from "@wix/stores";
 import { ProductVersionHandler, type ProductSearchResult } from "./product-version-handler";
-import { normalizeText } from "../utils";
-import { rankProducts } from "./store-helper";
 import { auth } from "@wix/essentials";
 import type { ProductCard } from "../../../shared/types";
 import type { SearchProductsInput } from "../tools";
 
 export class ProductsV3Handler extends ProductVersionHandler<productsV3.V3Product> {
   async searchProducts(params: SearchProductsInput): Promise<ProductSearchResult> {
-    const normalizedQuery = normalizeText(params.query);
-    const shouldBrowseAll = params.browse_all || normalizedQuery.length === 0;
+    const shouldBrowseAll = params.browse_all || !params.query?.trim();
 
     const search: productsV3.V3ProductSearch = {
       cursorPaging: { limit: params.limit }
     };
     if (!shouldBrowseAll) {
-      search.search = { expression: normalizedQuery };
+      search.search = { expression: params.query };
     }
     if (params.max_price != null) {
       search.filter = { 'actualPriceRange.minValue.amount': { $lte: String(params.max_price) } };
@@ -23,15 +20,7 @@ export class ProductsV3Handler extends ProductVersionHandler<productsV3.V3Produc
     const result = await auth.elevate(productsV3.searchProducts)(search, {fields: ['URL', 'CURRENCY', 'PLAIN_DESCRIPTION', 'ALL_CATEGORIES_INFO', 'THUMBNAIL']});
     if (!result.products?.length) return { found: false, message: 'No products found matching that query.' };
 
-    const rankedProducts = shouldBrowseAll
-      ? result.products.slice(0, params.limit)
-      : rankProducts(result.products as Record<string, unknown>[], normalizedQuery).slice(0, params.limit) as productsV3.V3Product[];
-
-    if (!rankedProducts.length) {
-      return { found: false, message: 'No products found matching that query.' };
-    }
-
-    return { found: true, mode: shouldBrowseAll ? 'browse' : 'search', products: rankedProducts };
+    return { found: true, mode: shouldBrowseAll ? 'browse' : 'search', products: result.products };
   }
 
   toProductCard(product: productsV3.V3Product): ProductCard {
@@ -61,7 +50,7 @@ export class ProductsV3Handler extends ProductVersionHandler<productsV3.V3Produc
     );
     return variant?._id ?? undefined;
   }
-  
+
 }
 
 export const productsV3Handler = new ProductsV3Handler();

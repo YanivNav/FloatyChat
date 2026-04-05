@@ -25,9 +25,12 @@ const FALLBACK_SYSTEM_PROMPT =
 
 async function buildSystemPrompt(context?: VisitorContext): Promise<string> {
   try {
-    const siteInfo = await auth.elevate(siteProperties.getSiteProperties)({
-      fields: ['businessName', 'siteDisplayName', 'description', 'categories'],
-    });
+    const [siteInfo, tokenInfo] = await Promise.all([
+      auth.elevate(siteProperties.getSiteProperties)({
+        fields: ['businessName', 'siteDisplayName', 'description', 'categories'],
+      }),
+      auth.getTokenInfo(),
+    ]);
     const pageDescriptions = context?.structure ? 
       context.structure.pages.map((p) => `"${p.url || (p.prefix + '...')}" (${p.name})`).join(', \n') 
       : '';
@@ -63,6 +66,12 @@ async function buildSystemPrompt(context?: VisitorContext): Promise<string> {
       prompt += `\n\nTheir current cart contains: ${cartSummary}.`;
     } else if (context?.cart) {
       prompt += `\n\nTheir cart is currently empty.`;
+    }
+
+    if (tokenInfo.subjectType === 'MEMBER') {
+      prompt += `\n\nThe visitor is logged in as a member. Tools that require login (order history, order cancellation) are available.`;
+    } else {
+      prompt += `\n\nThe visitor is not logged in. Do not offer tools that require login (order history, order cancellation) unless they provide an order number.`;
     }
 
     console.debug('Built system prompt:', prompt);

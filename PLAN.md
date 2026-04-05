@@ -218,7 +218,7 @@ Use http streams
 - **Enable / Disable / Customize Tools** - Allow enabling, disabling, and changing settings of tools the bot can use
 
 ### Additional Tools
-- **OrderS** — Using `@wix/ecom` for orders API. Check for the user's shipping order status, cancel orders, etc.
+- **Orders** — Using `@wix/ecom` for orders API. Check for the user's shipping order status, cancel orders, etc.
 - **CMS/content search tool** — `search_content` backend tool that queries Wix CMS collections (blog posts, FAQs, forums, etc.) so the bot can answer questions beyond products. (Ties into V1 items 5 and 9.)
 - **Fill out forms** - The bot would be able to fill out forms in the site for the user, for example a contact form.
 - **Booking Support** - Lets the bot create booking orders, ask about available hours, cancel, etc.

@@ -1,8 +1,9 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { items } from '@wix/data';
 import { auth } from '@wix/essentials';
+import { orders, orderFulfillments } from '@wix/ecom';
 import { productVersionHandler } from './store/product-version-handler';
-import type { AddToCartAction, FaqEntry, FrontendAction } from '../../shared/types';
+import type { AddToCartAction, FaqEntry, FrontendAction, ProductCard } from '../../shared/types';
 import { FAQ_COLLECTION_ID } from '../../shared/collection-utils';
 
 export interface Page {
@@ -15,6 +16,7 @@ export interface SearchProductsInput {
   browse_all: boolean;
   max_price?: number;
   limit: number;
+  page?: number;
 }
 
 export interface NavigateToPageInput {
@@ -49,30 +51,66 @@ export interface BackendTool<TInput = unknown> {
 const searchProductsTool: BackendTool<SearchProductsInput> = {
   schema: {
     name: 'search_products',
-    description: 'Search or browse the store catalog. Use this when the visitor asks about products, wants recommendations, asks what the store sells, or needs help finding an item even if they do not know the exact product name. For broad catalog questions like "what do you sell?" set browse_all to true. After using this tool the user will see the results as cards, so your text response should be very brief',
+    description: `Search or browse the store catalog. Returns a list of matching products for you to review. After calling this, decide which results are actually relevant to the visitor's request, then call show_products with only those products. For navigation to a product page, use the slug from the results without calling show_products.`,
     input_schema: {
       type: 'object',
       properties: {
         query: {
           type: 'string',
-          description: 'Optional search phrase, e.g. "blue shirt", "running shoes", or "gift ideas". Leave empty when browsing the catalog generally.',
+          description: 'Search phrase, e.g. "blue shirt", "running shoes". Leave empty only when browse_all is true.',
         },
         browse_all: {
           type: 'boolean',
-          description: 'Set to true when the visitor wants to browse the catalog or asks general questions like "what products do you sell?"',
+          description: 'Set to true when the visitor wants to browse the entire catalog or asks general questions like "what products do you sell?". Set to false when searching for a specific product. Also set to true if searching for a specific product returned no relevant results.',
         },
         max_price: { type: 'number', description: 'Optional maximum price filter' },
-        limit: { type: 'number', description: 'Max number of results to return, default 5' },
+        limit: { type: 'number', description: 'Max number of results to return. Use 50 when browsing, 5 when searching for something specific.' },
+        page: { type: 'number', description: 'Page number for pagination, starting at 0. Only used when browse_all is true and if the previous search has no relevant results.' },
       },
       required: ['browse_all', 'limit'],
     },
   },
-  execute: async (input, ctx) => {
+  execute: async (input) => {
     const result = await productVersionHandler.searchProducts(input);
     if (result.found && Array.isArray(result.products) && result.products.length > 0) {
-      ctx.frontendActions.push({ type: 'show_products', products: result.products.map((p) => productVersionHandler.toProductCard(p)) });
+      const cards = result.products.map((p) => productVersionHandler.toProductCard(p));
+      return { found: true, products: cards };
     }
     return result;
+  },
+};
+
+const showProductsTool: BackendTool<{ products: Array<ProductCard> }> = {
+  schema: {
+    name: 'show_products',
+    description: 'Display a selection of products to the visitor as cards. Call this after search_products with only the products you determined are relevant. Pass the product objects exactly as returned by search_products. Your text response should be very brief since the visitor will see the cards.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        products: {
+          type: 'array',
+          description: 'The products to display, selected from the search_products results.',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              name: { type: 'string' },
+              price: { type: 'string' },
+              slug: { type: 'string' },
+              imageUrl: { type: 'string' },
+              url: { type: 'string' },
+            },
+            required: ['id', 'name', 'price', 'slug'],
+          },
+        },
+      },
+      required: ['products'],
+    },
+  },
+  execute: async (input, ctx) => {
+    const cards = input.products.map((p) => ({ ...p, url: p.url ?? `/product-page/${p.slug}` }));
+    if (cards.length > 0) ctx.frontendActions.push({ type: 'show_products', products: cards });
+    return { shown: cards.length };
   },
 };
 
@@ -157,9 +195,9 @@ const proceedToCheckoutTool: BackendTool = {
 const navigateToPageTool: BackendTool<NavigateToPageInput> = {
   schema: {
     name: 'navigate_to_page',
-    description: `Navigate the visitor to a page on the site. Use the exact URL from the page list for ordinary pages. 
-    For product pages, first call search_products to find the exact product, then construct the page URL in the form of /product-page/{slug}.
-    For prodcut category pages, construct the URL in the form of /category/{category-slug}. All Products is a category page with the slug "all-products".`,
+    description: `Navigate the visitor to a page on the site. Use the exact URL from the page list for ordinary pages.
+    For product pages, first call search_products to find the product, then use the slug from the results to construct the URL in the form of /product-page/{slug}. Do NOT call show_products in this case.
+    For product category pages, construct the URL in the form of /category/{category-slug}. All Products is a category page with the slug "all-products".`,
     input_schema: {
       type: 'object',
       properties: {
@@ -219,6 +257,137 @@ const searchKnowledgeBaseTool: BackendTool<{ query: string }> = {
   },
 };
 
+function formatOrder(order: orders.Order, fulfillments?: orderFulfillments.Fulfillment[]) {
+  const tracking = (fulfillments ?? [])
+    .map((f) => f.trackingInfo)
+    .filter((t): t is orderFulfillments.FulfillmentTrackingInfo => !!t?.trackingNumber)
+    .map((t) => ({ trackingNumber: t.trackingNumber, trackingLink: t.trackingLink, provider: t.shippingProvider }));
+
+  return {
+    orderNumber: order.number,
+    paymentStatus: order.paymentStatus,
+    fulfillmentStatus: order.fulfillmentStatus,
+    total: order.priceSummary?.total?.formattedAmount,
+    createdDate: order._createdDate?.toISOString?.().split('T')[0],
+    items: (order.lineItems ?? []).map((l: any) => ({
+      name: l.productName?.original,
+      quantity: l.quantity,
+      price: l.price?.formattedAmount,
+    })),
+    estimatedDelivery: order.shippingInfo?.logistics?.deliveryTime ?? null,
+    tracking: tracking.length ? tracking : null,
+  };
+}
+
+const getOrderStatusTool: BackendTool<{ order_number: string }> = {
+  schema: {
+    name: 'get_order_status',
+    description: 'Look up a specific order by order number. Use when the visitor provides an order number and asks about payment status, fulfillment, estimated delivery, or tracking.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        order_number: { type: 'string', description: 'The order number exactly as the visitor stated it, e.g. "10042"' },
+      },
+      required: ['order_number'],
+    },
+  },
+  execute: async (input) => {
+    try {
+      const result = await auth.elevate(orders.searchOrders)({
+        filter: { number: { $eq: input.order_number } },
+        cursorPaging: { limit: 1 },
+      });
+      if (!result.orders?.length) {
+        return { found: false, message: `No order found with number ${input.order_number}.` };
+      }
+      const order = result.orders[0]!;
+      const fulfillmentsResult = await auth.elevate(orderFulfillments.listFulfillmentsForSingleOrder)(order._id!);
+      return { found: true, order: formatOrder(order, fulfillmentsResult.orderWithFulfillments?.fulfillments) };
+    } catch {
+      return { error: 'Could not retrieve order. Please try again.' };
+    }
+  },
+};
+
+const listMyOrdersTool: BackendTool<{ limit?: number }> = {
+  schema: {
+    name: 'list_my_orders',
+    description: "List the visitor's recent orders. Use when the visitor asks to see their orders or order history without providing a specific order number. Only works if the visitor is logged in.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        limit: { type: 'number', description: 'Max number of orders to return, default 5' },
+      },
+      required: [],
+    },
+  },
+  execute: async (input) => {
+    try {
+      const tokenInfo = await auth.getTokenInfo();
+      if (tokenInfo.subjectType !== 'MEMBER') {
+        return { found: false, message: 'You need to be logged in to view your orders.' };
+      }
+      const result = await auth.elevate(orders.searchOrders)({
+        filter: { 'buyerInfo.memberId': { $eq: tokenInfo.subjectId } },
+        sort: [{ fieldName: '_createdDate', order: 'DESC' }],
+        cursorPaging: { limit: input.limit ?? 5 },
+      });
+      if (!result.orders?.length) {
+        return { found: false, message: 'No orders found for your account.' };
+      }
+      return { found: true, count: result.orders.length, orders: result.orders.map((o) => formatOrder(o)) };
+    } catch {
+      return { error: 'Could not retrieve orders. Please try again.' };
+    }
+  },
+};
+
+const cancelOrderTool: BackendTool<{ order_number: string }> = {
+  schema: {
+    name: 'cancel_order',
+    description: 'Cancel an order by order number. Only works for logged-in members cancelling their own orders. Do not attempt if the order is already cancelled or fulfilled.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        order_number: { type: 'string', description: 'The order number to cancel, e.g. "10042"' },
+      },
+      required: ['order_number'],
+    },
+  },
+  execute: async (input) => {
+    try {
+      const tokenInfo = await auth.getTokenInfo();
+      if (tokenInfo.subjectType !== 'MEMBER') {
+        return { success: false, message: 'You need to be logged in to cancel an order.' };
+      }
+
+      const result = await auth.elevate(orders.searchOrders)({
+        filter: { number: { $eq: input.order_number } },
+        cursorPaging: { limit: 1 },
+      });
+      if (!result.orders?.length) {
+        return { success: false, message: `No order found with number ${input.order_number}.` };
+      }
+      const order = result.orders[0]!;
+
+      if (order.buyerInfo?.memberId !== tokenInfo.subjectId) {
+        return { success: false, message: 'You can only cancel your own orders.' };
+      }
+      if (order.status === 'CANCELED') {
+        return { success: false, message: `Order ${input.order_number} is already cancelled.` };
+      }
+      if (order.fulfillmentStatus === 'FULFILLED') {
+        return { success: false, message: `Order ${input.order_number} has already been fulfilled and cannot be cancelled.` };
+      }
+
+      await auth.elevate(orders.cancelOrder)(order._id!, { sendOrderCanceledEmail: true, restockAllItems: true });
+      return { success: true, message: `Order ${input.order_number} has been cancelled successfully.` };
+    } catch {
+      return { success: false, message: 'Could not cancel the order. Please try again or contact support.' };
+    }
+  },
+};
+
 const removeFromCartTool: BackendTool<{ product_name: string }> = {
   schema: {
     name: 'remove_from_cart',
@@ -241,9 +410,13 @@ export async function buildToolRegistry(): Promise<Map<string, BackendTool<any>>
   const tools: BackendTool<any>[] = [
     searchKnowledgeBaseTool,
     searchProductsTool,
+    showProductsTool,
     askClarificationTool,
     navigateToPageTool,
     addToCartTool,
+    getOrderStatusTool,
+    listMyOrdersTool,
+    cancelOrderTool,
     removeFromCartTool,
     proceedToCheckoutTool,
   ];

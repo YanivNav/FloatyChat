@@ -15,6 +15,7 @@ import { ProductCarousel } from './components/ProductCarousel';
 import { MessageBubble } from './components/MessageBubble';
 import styles from './chat-widget.module.scss';
 import type { BotSettings } from '../../../../shared/types';
+import { DEFAULT_CHAT_SETTINGS } from '../../../../shared/chat-settings';
 
 interface ChatAssistantProps {
   primaryColor?: string;
@@ -23,8 +24,7 @@ interface ChatAssistantProps {
 const ChatWidget: FC<ChatAssistantProps> = ({
   primaryColor = '#116DFF',
 }) => {
-  const [botName, setBotName] = useState<string>('AI Assistant');
-  const [greetingMessage, setGreetingMessage] = useState<string>('Hi! How can I help you today?');
+  const [botName, setBotName] = useState<string>('Loading...');
   const [isOpen, setIsOpen] = useState<boolean>(() => loadChatState()?.isOpen ?? false);
   const [messages, setMessages] = useState<Message[]>(() => loadChatState()?.messages ?? []);
   const [inputValue, setInputValue] = useState<string>('');
@@ -38,14 +38,24 @@ const ChatWidget: FC<ChatAssistantProps> = ({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Load bot settings
   useEffect(() => {
     httpClient.fetchWithAuth(`${new URL(import.meta.url).origin}/api/settings`)
       .then((res) => res.json())
       .then((data: BotSettings) => {
         if (data.botName) setBotName(data.botName);
-        if (data.greetingMessage) setGreetingMessage(data.greetingMessage);
+        if (!hasGreeted) {
+          setMessages([{ id: 'greeting', role: 'bot', text: data.greetingMessage || DEFAULT_CHAT_SETTINGS.greetingMessage }]);
+          setHasGreeted(true);
+        }
       })
-      .catch(() => {});
+      .catch(() => {
+        setBotName(DEFAULT_CHAT_SETTINGS.botName);
+        if (!hasGreeted) {
+          setMessages([{ id: 'greeting', role: 'bot', text: DEFAULT_CHAT_SETTINGS.greetingMessage }]);
+          setHasGreeted(true);
+        }
+      });
   }, []);
 
   useEffect(() => {
@@ -57,13 +67,6 @@ const ChatWidget: FC<ChatAssistantProps> = ({
   useEffect(() => {
     saveChatState({ isOpen, messages, hasGreeted });
   }, [hasGreeted, isOpen, messages]);
-
-  useEffect(() => {
-    if (isOpen && !hasGreeted) {
-      setMessages([{ id: 'greeting', role: 'bot', text: greetingMessage }]);
-      setHasGreeted(true);
-    }
-  }, [isOpen, hasGreeted, greetingMessage]);
 
   useEffect(() => {
     getVisitorContext()
@@ -115,7 +118,7 @@ const ChatWidget: FC<ChatAssistantProps> = ({
       const res = await httpClient.fetchWithAuth(`${new URL(import.meta.url).origin}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text, history, context: visitorContext }),
+        body: JSON.stringify({ message: text, history, context: { ...visitorContext, cart: await getCartItems() } }),
       });
 
       if (!res.body) {
@@ -265,8 +268,8 @@ const ChatWidget: FC<ChatAssistantProps> = ({
 };
 
 async function getVisitorContext(): Promise<VisitorContext> {
-  const [page, cart, structure] = await Promise.all([getPageInfo(), getCartItems(), wixSite.getSiteStructure()]);
-  return { page, cart, structure };
+  const [page, structure] = await Promise.all([getPageInfo(), wixSite.getSiteStructure()]);
+  return { page, structure };
 }
 
 async function getPageInfo(): Promise<PageInfo> {
