@@ -157,7 +157,9 @@ const proceedToCheckoutTool: BackendTool = {
 const navigateToPageTool: BackendTool<NavigateToPageInput> = {
   schema: {
     name: 'navigate_to_page',
-    description: `Navigate the visitor to a page on the site. Use the exact URL from the page list for ordinary pages. For product pages, first call search_products to find the exact product, then construct the page URL in the form of /product-page/{slug}.`,
+    description: `Navigate the visitor to a page on the site. Use the exact URL from the page list for ordinary pages. 
+    For product pages, first call search_products to find the exact product, then construct the page URL in the form of /product-page/{slug}.
+    For prodcut category pages, construct the URL in the form of /category/{category-slug}. All Products is a category page with the slug "all-products".`,
     input_schema: {
       type: 'object',
       properties: {
@@ -217,6 +219,24 @@ const searchKnowledgeBaseTool: BackendTool<{ query: string }> = {
   },
 };
 
+const removeFromCartTool: BackendTool<{ product_name: string }> = {
+  schema: {
+    name: 'remove_from_cart',
+    description: "Remove a product from the visitor's cart by name. Use the product name exactly as it appears in the cart context.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        product_name: { type: 'string', description: 'The name of the product to remove from the cart' },
+      },
+      required: ['product_name'],
+    },
+  },
+  execute: async (input, ctx) => {
+    ctx.frontendActions.push({ type: 'remove_from_cart', product_name: input.product_name });
+    return { success: true };
+  },
+};
+
 export async function buildToolRegistry(): Promise<Map<string, BackendTool<any>>> {
   const tools: BackendTool<any>[] = [
     searchKnowledgeBaseTool,
@@ -224,6 +244,7 @@ export async function buildToolRegistry(): Promise<Map<string, BackendTool<any>>
     askClarificationTool,
     navigateToPageTool,
     addToCartTool,
+    removeFromCartTool,
     proceedToCheckoutTool,
   ];
   return new Map(tools.map((tool) => [tool.schema.name, tool]));

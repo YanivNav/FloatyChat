@@ -51,7 +51,17 @@ export interface CheckoutAction {
   type: 'proceed_to_checkout';
 }
 
-export type FrontendAction = ShowProductsAction | AddToCartAction | NavigateToPageAction | CheckoutAction;
+export interface RemoveFromCartAction {
+  type: 'remove_from_cart';
+  product_name: string;
+}
+
+export type FrontendAction = 
+| ShowProductsAction 
+| AddToCartAction 
+| NavigateToPageAction 
+| CheckoutAction 
+| RemoveFromCartAction;
 
 
 export interface BotSettings extends Record<string, unknown> {

@@ -65,7 +65,7 @@ async function buildSystemPrompt(context?: VisitorContext): Promise<string> {
       prompt += `\n\nTheir cart is currently empty.`;
     }
 
-    console.log('Built system prompt:', prompt);
+    console.debug('Built system prompt:', prompt);
 
     return prompt;
   } catch (err) {
