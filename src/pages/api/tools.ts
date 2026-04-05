@@ -1,6 +1,9 @@
 import type Anthropic from "@anthropic-ai/sdk";
+import { items } from '@wix/data';
+import { auth } from '@wix/essentials';
 import { productVersionHandler } from './store/product-version-handler';
-import type { AddToCartAction, FrontendAction } from '../../shared/types';
+import type { AddToCartAction, FaqEntry, FrontendAction } from '../../shared/types';
+import { FAQ_COLLECTION_ID } from '../../shared/collection-utils';
 
 export interface Page {
   name: string;
@@ -170,8 +173,49 @@ const navigateToPageTool: BackendTool<NavigateToPageInput> = {
   },
 }
 
+const searchKnowledgeBaseTool: BackendTool<{ query: string }> = {
+  schema: {
+    name: 'search_knowledge_base',
+    description: 'Search the site FAQ knowledge base for answers about policies, shipping, returns, hours, or any site-specific question. Use this before answering any FAQ-style question.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'The visitor question or topic to look up' },
+      },
+      required: ['query'],
+    },
+  },
+  execute: async (input) => {
+    try {
+      const { items: faqs } = await auth.elevate(items.query)(FAQ_COLLECTION_ID).limit(50).find();
+      if (!faqs.length) return { matches: [], message: 'No FAQ entries found.' };
+
+      const keywords = input.query.toLowerCase().split(/\s+/).filter((w) => w.length >= 3);
+      if (!keywords.length) return { matches: [], message: 'Query too short.' };
+
+      const scored = (faqs as FaqEntry[])
+        .map((faq) => {
+          const text = `${faq.question} ${faq.answer}`.toLowerCase();
+          const score = keywords.reduce((n, kw) => n + (text.includes(kw) ? 1 : 0), 0);
+          return { ...faq, score };
+        })
+        .filter((f) => f.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 5)
+        .map(({ question, answer }) => ({ question, answer }));
+
+      return scored.length
+        ? { matches: scored }
+        : { matches: [], message: 'No relevant FAQ entries found.' };
+    } catch {
+      return { error: 'Knowledge base unavailable.' };
+    }
+  },
+};
+
 export async function buildToolRegistry(): Promise<Map<string, BackendTool<any>>> {
   const tools: BackendTool<any>[] = [
+    searchKnowledgeBaseTool,
     searchProductsTool,
     askClarificationTool,
     navigateToPageTool,

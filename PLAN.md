@@ -189,10 +189,8 @@ Use http streams
 
 - **Claude API key** — store in environment variables
 - **Navigation from widget** — the widget is a native Wix component (not an iframe), so `wixLocation.to()` and `wixWindow` APIs work directly from widget frontend code
-- **Cart operations** — use `wixStoresBackend` from backend functions, not frontend
-- **Checkout** — use `wixLocation.to("/checkout")` from widget frontend after cart is confirmed
 - **Permissions required** — declare in app dashboard: Wix Stores read/write, CMS read/write, Contacts read/write
-- **Session state** — store conversation history in `wixData` or in-memory per session; keep last N messages to avoid Claude context ballooning
+- **Session state** — store conversation history in session storage; keep last N messages to avoid Claude context ballooning
 
 ---
 
@@ -211,44 +209,22 @@ Use http streams
 11. **Monetization gates** — enforce chat limits per tier
 12. **App Market prep** — permissions, listing, review
 
----
-
-## Project Structure (Wix CLI)
-
-```
-src/
-  dashboard/
-    pages/
-      page.tsx              # Main dashboard page (bot settings)
-      knowledge/page.tsx    # Knowledge base editor
-      analytics/page.tsx    # Conversation analytics
-  site/
-    widgets/
-      chat-widget/
-        widget.tsx          # Chat UI component
-        widget.module.css   # Widget styles
-  backend/
-    chat.web.ts             # Web method: initiate chat session
-    claude.ts               # Claude API caller + tool executor
-    knowledge.ts            # Knowledge base search
-    stores.ts               # Wix Stores actions (cart, products)
-    realtime.ts             # wixRealtime publish helpers
-  wix.config.json           # App manifest
-  package.json
-```
-
----
-
 ## Next Features (Post-Current-State)
 
-### High impact, relatively straightforward
-- **Dashboard settings page** — Configure `botName`, `primaryColor`, `greetingMessage` from a dashboard UI and persist them. Currently just editor widget props. Needed for the app to feel complete for site owners. (Ties into V1 item 10.)
+### High impact
 - **Contextual greeting** — Use the page context (title/description) to make the opening message relevant, e.g. "I see you're looking at [product] — want to know more?" instead of a generic opener.
 - **Member context** — If the visitor is logged in (`@wix/members` / `@wix/identity`), pass their name and info to the bot for personalized responses.
+- **Customize System Prompt** - Lets the site owner further customize the bot by adding additional general info, constraints, guidance, set the tone, etc.
+- **Enable / Disable / Customize Tools** - Allow enabling, disabling, and changing settings of tools the bot can use
 
-### More involved, high value
-- **Order history tool** — `get_order_status` backend tool using `@wix/ecom` orders API. "Where's my order?" is the most common e-commerce support question.
-- **CMS/content search tool** — `search_content` backend tool that queries Wix CMS collections (blog posts, FAQs, etc.) so the bot can answer questions beyond products. (Ties into V1 items 5 and 9.)
+### Additional Tools
+- **OrderS** — Using `@wix/ecom` for orders API. Check for the user's shipping order status, cancel orders, etc.
+- **CMS/content search tool** — `search_content` backend tool that queries Wix CMS collections (blog posts, FAQs, forums, etc.) so the bot can answer questions beyond products. (Ties into V1 items 5 and 9.)
+- **Fill out forms** - The bot would be able to fill out forms in the site for the user, for example a contact form.
+- **Booking Support** - Lets the bot create booking orders, ask about available hours, cancel, etc.
+- **Event Registration** - Lets the bot order event tickets, check event dates, add the event to the visitor's calendar, etc.
+- **Restaurant Reservations** - Reserve a Restaurant for the visitor, provide opening hours info, questions about the menu, etc.
+- **Pricing Plans Support** - Questions about the pricing plans, order status, etc.
 
 ### Polish / infrastructure
 - **Rate limiting** — `/api/chat` endpoint has no abuse protection.

@@ -13,6 +13,7 @@ import { TypingIndicator } from './components/TypingIndicator';
 import { ProductCarousel } from './components/ProductCarousel';
 import { MessageBubble } from './components/MessageBubble';
 import styles from './chat-widget.module.scss';
+import type { BotSettings } from '../../../../shared/types';
 
 interface ChatAssistantProps {
   primaryColor?: string;
@@ -32,13 +33,14 @@ const ChatWidget: FC<ChatAssistantProps> = ({
     return restored?.hasGreeted ?? (restored?.messages.length ?? 0) > 0;
   });
   const [inEditor, setInEditor] = useState<boolean>(false);
+  const [visitorContext, setVisitorContext] = useState<VisitorContext>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     httpClient.fetchWithAuth(`${new URL(import.meta.url).origin}/api/settings`)
       .then((res) => res.json())
-      .then((data: { botName?: string; greetingMessage?: string }) => {
+      .then((data: BotSettings) => {
         if (data.botName) setBotName(data.botName);
         if (data.greetingMessage) setGreetingMessage(data.greetingMessage);
       })
@@ -61,6 +63,12 @@ const ChatWidget: FC<ChatAssistantProps> = ({
       setHasGreeted(true);
     }
   }, [isOpen, hasGreeted, greetingMessage]);
+
+  useEffect(() => {
+    getVisitorContext()
+      .then((context) => setVisitorContext(context))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -103,12 +111,10 @@ const ChatWidget: FC<ChatAssistantProps> = ({
       }));
 
     try {
-      const [page, cart] = await Promise.all([getPageInfo(), getCartItems()]);
-      const context: VisitorContext = { page, cart };
       const res = await httpClient.fetchWithAuth(`${new URL(import.meta.url).origin}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text, history, context }),
+        body: JSON.stringify({ message: text, history, context: visitorContext }),
       });
 
       if (!res.body) {
@@ -256,6 +262,11 @@ const ChatWidget: FC<ChatAssistantProps> = ({
     </>
   );
 };
+
+async function getVisitorContext(): Promise<VisitorContext> {
+  const [page, cart] = await Promise.all([getPageInfo(), getCartItems()]);
+  return { page, cart };
+}
 
 async function getPageInfo(): Promise<PageInfo> {
   const url = await siteLocation.url();

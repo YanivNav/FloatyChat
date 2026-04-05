@@ -26,6 +26,22 @@ export const dataExtension = extensions.genericExtension({
             { botName: 'AI Assistant', greetingMessage: 'Hi! How can I help you today?' },
           ],
         },
+        {
+          schemaUrl: 'https://www.wix.com/',
+          idSuffix: 'faq',
+          displayName: 'FAQ',
+          displayField: 'question',
+          fields: [
+            { key: 'question', displayName: 'Question', type: 'TEXT' },
+            { key: 'answer', displayName: 'Answer', type: 'TEXT' },
+          ],
+          dataPermissions: {
+            itemRead: 'CMS_EDITOR',
+            itemInsert: 'CMS_EDITOR',
+            itemUpdate: 'CMS_EDITOR',
+            itemRemove: 'PRIVILEGED',
+          },
+        },
       ],
     },
   },

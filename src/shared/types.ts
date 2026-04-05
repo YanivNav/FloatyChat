@@ -49,3 +49,16 @@ export interface CheckoutAction {
 }
 
 export type FrontendAction = ShowProductsAction | AddToCartAction | NavigateToPageAction | CheckoutAction;
+
+
+export interface BotSettings extends Record<string, unknown> {
+  _id?: string;
+  botName: string;
+  greetingMessage: string;
+}
+
+export interface FaqEntry extends Record<string, unknown> {
+  _id?: string;
+  question: string;
+  answer: string;
+}
