@@ -21,16 +21,16 @@ interface SendMessageRequest {
 const FALLBACK_SYSTEM_PROMPT =
   `You are a helpful AI assistant for this website.
   Only answer questions related to this website and its business.
-  If asked about unrelated topics, politely decline and offer to help with something relevant to this site instead.`;
+  If asked about unrelated topics, or topics you didn't find in the knowledge base, politely decline and offer to help with something relevant to this site instead.`;
 
 async function buildSystemPrompt(context?: VisitorContext): Promise<string> {
   try {
     const siteInfo = await auth.elevate(siteProperties.getSiteProperties)({
       fields: ['businessName', 'siteDisplayName', 'description', 'categories'],
     });
-    const siteStructure = await wixSite.getSiteStructure();
-    const pageDescriptions = siteStructure.pages.length > 0
-        ? siteStructure.pages.map((p) => `"${p.url}" (${p.name})`).join(', \n') : '';
+    const pageDescriptions = context?.structure ? 
+      context.structure.pages.map((p) => `"${p.url || (p.prefix + '...')}" (${p.name})`).join(', \n') 
+      : '';
 
     const props = siteInfo.properties;
     const name = props?.businessName || props?.siteDisplayName || 'this website';
@@ -65,8 +65,11 @@ async function buildSystemPrompt(context?: VisitorContext): Promise<string> {
       prompt += `\n\nTheir cart is currently empty.`;
     }
 
+    console.log('Built system prompt:', prompt);
+
     return prompt;
-  } catch {
+  } catch (err) {
+    console.error('Error building system prompt:', err);
     return FALLBACK_SYSTEM_PROMPT;
   }
 }
@@ -82,6 +85,7 @@ async function executeTool(
   if (!tool) {
     return { earlyExit: false, result: { type: 'tool_result', tool_use_id: id, content: JSON.stringify({ error: `Unknown tool: ${name}` }) } };
   }
+  console.log(`Executing tool: ${name} with input:`, input);
   const res = await tool.execute(input, ctx);
   if (res.earlyExit) {
     return { earlyExit: true }
@@ -144,6 +148,8 @@ async function runAgentLoop(
     if (earlyExit) break;
     messages.push({ role: 'user', content: toolResults });
   }
+
+  console.log('Sending frontend actions:', frontendActions);
 
   for (const action of frontendActions) {
     send({ type: 'action', action });

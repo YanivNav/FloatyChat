@@ -4,6 +4,7 @@ import reactToWebComponent from 'react-to-webcomponent';
 import { location as siteLocation } from '@wix/site-location';
 import { currentCart } from '@wix/ecom';
 import { window as siteWindow } from '@wix/site-window';
+import { site as wixSite } from "@wix/site-site";
 import { httpClient } from '@wix/essentials';
 import type { Message, FrontendAction, ProductCard, PageInfo, CartItem, VisitorContext } from './types';
 import { handleActions as dispatchActions, addToCart } from './actions';
@@ -264,8 +265,8 @@ const ChatWidget: FC<ChatAssistantProps> = ({
 };
 
 async function getVisitorContext(): Promise<VisitorContext> {
-  const [page, cart] = await Promise.all([getPageInfo(), getCartItems()]);
-  return { page, cart };
+  const [page, cart, structure] = await Promise.all([getPageInfo(), getCartItems(), wixSite.getSiteStructure()]);
+  return { page, cart, structure };
 }
 
 async function getPageInfo(): Promise<PageInfo> {

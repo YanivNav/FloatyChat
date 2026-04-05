@@ -176,7 +176,7 @@ const navigateToPageTool: BackendTool<NavigateToPageInput> = {
 const searchKnowledgeBaseTool: BackendTool<{ query: string }> = {
   schema: {
     name: 'search_knowledge_base',
-    description: 'Search the site FAQ knowledge base for answers about policies, shipping, returns, hours, or any site-specific question. Use this before answering any FAQ-style question.',
+    description: 'Use this tool to search the site knowledge base for answers about policies, shipping, returns, hours, or ANY other question, even if it might sound stupid or unrelated to the website. Use this before answering any random question. The query will be matched against a collection of FAQ entries that the site owner can manage in the dashboard. If there are no relevant matches, do not return any results and answer the visitor based on your general knowledge.',
     input_schema: {
       type: 'object',
       properties: {
@@ -190,7 +190,11 @@ const searchKnowledgeBaseTool: BackendTool<{ query: string }> = {
       const { items: faqs } = await auth.elevate(items.query)(FAQ_COLLECTION_ID).limit(50).find();
       if (!faqs.length) return { matches: [], message: 'No FAQ entries found.' };
 
-      const keywords = input.query.toLowerCase().split(/\s+/).filter((w) => w.length >= 3);
+      const keywords = input.query.toLowerCase().split(/\s+/)
+        .map(w => w.replaceAll('?', ''))
+        .filter((w) => w.length >= 3);
+
+      console.log('Searching knowledge base for:', keywords);
       if (!keywords.length) return { matches: [], message: 'Query too short.' };
 
       const scored = (faqs as FaqEntry[])
