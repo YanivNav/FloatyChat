@@ -16,6 +16,7 @@ import { MessageBubble } from './components/MessageBubble';
 import styles from './chat-widget.module.scss';
 import type { BotSettings } from '../../../../shared/types';
 import { DEFAULT_CHAT_SETTINGS } from '../../../../shared/chat-settings';
+import { seo } from '@wix/site-seo';
 
 interface ChatAssistantProps {
   primaryColor?: string;
@@ -25,23 +26,35 @@ const ChatWidget: FC<ChatAssistantProps> = ({
   primaryColor = '#116DFF',
 }) => {
   const [botName, setBotName] = useState<string>('Loading...');
-  const [isOpen, setIsOpen] = useState<boolean>(() => loadChatState()?.isOpen ?? false);
-  const [messages, setMessages] = useState<Message[]>(() => loadChatState()?.messages ?? []);
+  const [isOpen, setIsOpen] = useState<boolean>(false);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState<string>('');
   const [isTyping, setIsTyping] = useState<boolean>(false);
-  const [hasGreeted, setHasGreeted] = useState<boolean>(() => {
-    const restored = loadChatState();
-    return restored?.hasGreeted ?? (restored?.messages.length ?? 0) > 0;
-  });
+  const [hasGreeted, setHasGreeted] = useState<boolean>(false);
+  const [isLoaded, setIsLoaded] = useState<boolean>(false);
   const [inEditor, setInEditor] = useState<boolean>(false);
   const [visitorContext, setVisitorContext] = useState<VisitorContext>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Load bot settings
+  // Load chat state from session storage
   useEffect(() => {
+    loadChatState().then((stored) => {
+      if (stored) {
+        setIsOpen(stored.isOpen);
+        setMessages(stored.messages);
+        setHasGreeted(stored.hasGreeted);
+      }
+      setIsLoaded(true);
+    });
+  }, []);
+
+  // Load bot settings (only after storage state is restored)
+  useEffect(() => {
+    if (!isLoaded) return;
     httpClient.fetchWithAuth(`${new URL(import.meta.url).origin}/api/settings`)
       .then((res) => res.json())
+      .catch(() => DEFAULT_CHAT_SETTINGS)
       .then((data: BotSettings) => {
         if (data.botName) setBotName(data.botName);
         if (!hasGreeted) {
@@ -49,14 +62,7 @@ const ChatWidget: FC<ChatAssistantProps> = ({
           setHasGreeted(true);
         }
       })
-      .catch(() => {
-        setBotName(DEFAULT_CHAT_SETTINGS.botName);
-        if (!hasGreeted) {
-          setMessages([{ id: 'greeting', role: 'bot', text: DEFAULT_CHAT_SETTINGS.greetingMessage }]);
-          setHasGreeted(true);
-        }
-      });
-  }, []);
+  }, [isLoaded]);
 
   useEffect(() => {
     siteWindow.viewMode()
@@ -65,8 +71,9 @@ const ChatWidget: FC<ChatAssistantProps> = ({
   }, []);
 
   useEffect(() => {
+    if (!isLoaded) return;
     saveChatState({ isOpen, messages, hasGreeted });
-  }, [hasGreeted, isOpen, messages]);
+  }, [isLoaded, hasGreeted, isOpen, messages]);
 
   useEffect(() => {
     getVisitorContext()
@@ -273,10 +280,12 @@ async function getVisitorContext(): Promise<VisitorContext> {
 }
 
 async function getPageInfo(): Promise<PageInfo> {
-  const url = await siteLocation.url();
-  const title = document.title;
-  const description = document.querySelector('meta[name="description"]')?.getAttribute('content') ?? undefined;
-  return { url, title, description };
+  const page = await wixSite.currentPage()
+  const meta = await seo.metaTags()
+  const title = await seo.title()
+  const description = meta.find(m => m.name === 'description')?.content;
+
+  return { url: (page as any).url, title, description };
 }
 
 async function getCartItems(): Promise<CartItem[]> {
