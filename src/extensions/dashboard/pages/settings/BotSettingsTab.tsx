@@ -1,6 +1,7 @@
 import React, { type FC, useState, useEffect, useCallback } from 'react';
-import { Box, Button, Card, FormField, Input, Loader, Text } from '@wix/design-system';
+import { Box, Button, Card, FormField, Input, Loader } from '@wix/design-system';
 import { items } from '@wix/data';
+import { dashboard } from '@wix/dashboard';
 import { DEFAULT_CHAT_SETTINGS } from '../../../../shared/chat-settings';
 import { CHAT_SETTINGS_COLLECTION_ID } from '../../../../shared/collection-utils';
 import type { BotSettings } from '../../../../shared/types';
@@ -9,7 +10,6 @@ const BotSettingsTab: FC = () => {
   const [settings, setSettings] = useState<BotSettings>({ botName: DEFAULT_CHAT_SETTINGS.botName, greetingMessage: DEFAULT_CHAT_SETTINGS.greetingMessage });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [saveStatus, setSaveStatus] = useState<'idle' | 'saved' | 'error'>('idle');
 
   useEffect(() => {
     items.query(CHAT_SETTINGS_COLLECTION_ID)
@@ -24,7 +24,6 @@ const BotSettingsTab: FC = () => {
 
   const handleSave = useCallback(async () => {
     setSaving(true);
-    setSaveStatus('idle');
     try {
       if (settings._id) {
         await items.update(CHAT_SETTINGS_COLLECTION_ID, settings);
@@ -32,10 +31,9 @@ const BotSettingsTab: FC = () => {
         const inserted = await items.insert(CHAT_SETTINGS_COLLECTION_ID, settings);
         setSettings((prev) => ({ ...prev, _id: inserted._id }));
       }
-      setSaveStatus('saved');
-      setTimeout(() => setSaveStatus('idle'), 3000);
+      dashboard.showToast({ message: 'Settings saved.', type: 'success', timeout: 'normal' });
     } catch {
-      setSaveStatus('error');
+      dashboard.showToast({ message: 'Failed to save. Please try again.', type: 'error', timeout: 'none' });
     } finally {
       setSaving(false);
     }
@@ -68,12 +66,10 @@ const BotSettingsTab: FC = () => {
               placeholder={DEFAULT_CHAT_SETTINGS.greetingMessage}
             />
           </FormField>
-          <Box direction="horizontal" gap="SP3" verticalAlign="middle">
+          <Box>
             <Button onClick={handleSave} disabled={saving}>
               {saving ? 'Saving…' : 'Save'}
             </Button>
-            {saveStatus === 'saved' && <Text size="small" skin="success">Settings saved.</Text>}
-            {saveStatus === 'error' && <Text size="small" skin="error">Failed to save. Please try again.</Text>}
           </Box>
         </Box>
       </Card.Content>
