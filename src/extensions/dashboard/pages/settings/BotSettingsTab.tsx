@@ -2,6 +2,7 @@ import React, { type FC, useState, useEffect, useCallback } from 'react';
 import { Box, Button, Card, FormField, Input, Loader } from '@wix/design-system';
 import { items } from '@wix/data';
 import { dashboard } from '@wix/dashboard';
+import { httpClient } from '@wix/essentials';
 import { DEFAULT_CHAT_SETTINGS } from '../../../../shared/chat-settings';
 import { CHAT_SETTINGS_COLLECTION_ID } from '../../../../shared/collection-utils';
 import type { BotSettings } from '../../../../shared/types';
@@ -31,6 +32,7 @@ const BotSettingsTab: FC = () => {
         const inserted = await items.insert(CHAT_SETTINGS_COLLECTION_ID, settings);
         setSettings((prev) => ({ ...prev, _id: inserted._id }));
       }
+      await httpClient.fetchWithAuth(`${new URL(import.meta.url).origin}/api/settings`, { method: 'DELETE' });
       dashboard.showToast({ message: 'Settings saved.', type: 'success', timeout: 'normal' });
     } catch {
       dashboard.showToast({ message: 'Failed to save. Please try again.', type: 'error', timeout: 'none' });

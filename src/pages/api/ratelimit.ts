@@ -1,16 +1,15 @@
 import { Ratelimit } from "@upstash/ratelimit";
-import { Redis } from "@upstash/redis";
+import { getRedis } from "./redis";
 
 let ratelimit: Ratelimit | null = null;
 
 function getRatelimit(): Ratelimit | null {
-  const url = import.meta.env.UPSTASH_REDIS_REST_URL;
-  const token = import.meta.env.UPSTASH_REDIS_REST_TOKEN;
-  if (!url || !token) return null;
+  const redis = getRedis();
+  if (!redis) return null;
 
   if (!ratelimit) {
     ratelimit = new Ratelimit({
-      redis: new Redis({ url, token }),
+      redis,
       limiter: Ratelimit.slidingWindow(10, "1 m"),
       prefix: "@upstash/ratelimit",
     });
