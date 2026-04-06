@@ -73,6 +73,20 @@ export interface BotSettings extends Record<string, unknown> {
   _id?: string;
   botName: string;
   greetingMessage: string;
+  toolSettings?: string; // JSON-serialized ToolSettingsMap
+}
+
+export interface ToolConfig {
+  enabled: boolean;
+  instruction: string;
+}
+
+export type ToolSettingsMap = Record<string, ToolConfig>;
+
+export function parseToolSettings(raw: string | undefined): ToolSettingsMap {
+  if (!raw) return {};
+  try { return JSON.parse(raw) as ToolSettingsMap; }
+  catch { return {}; }
 }
 
 export interface FaqEntry extends Record<string, unknown> {

@@ -1,7 +1,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { items } from '@wix/data';
 import { auth } from '@wix/essentials';
-import type { FaqEntry, FrontendAction } from '../../../shared/types';
+import type { FaqEntry, FrontendAction, ToolSettingsMap } from '../../../shared/types';
 import { FAQ_COLLECTION_ID } from '../../../shared/collection-utils';
 import storeTools from "./store/store-tools";
 import orderTools from "./orders";
@@ -31,10 +31,17 @@ export interface ToolContext {
 export interface BackendTool<TInput = unknown> {
   schema: Anthropic.Tool;
   execute: (input: TInput, ctx: ToolContext) => Promise<ToolExecutionResult>;
+  displayName: string;
+  shortDescription: string;
+  category: 'store' | 'orders' | 'navigation' | 'utility';
+  instructionHint?: string;
 }
 
 
 const askClarificationTool: BackendTool<{ question: string }> = {
+  displayName: 'Ask Clarification',
+  shortDescription: 'Asks the visitor a follow-up question before taking an action.',
+  category: 'utility',
   schema: {
     name: 'ask_clarification',
     description: 'Ask the visitor a follow-up question before proceeding, e.g. to clarify size, color, or quantity.',
@@ -53,6 +60,10 @@ const askClarificationTool: BackendTool<{ question: string }> = {
 };
 
 const navigateToPageTool: BackendTool<NavigateToPageInput> = {
+  displayName: 'Navigate to Page',
+  shortDescription: 'Sends the visitor to a page on your site when they ask to go somewhere.',
+  category: 'navigation',
+  instructionHint: 'e.g. "Always navigate to /contact instead of /about"',
   schema: {
     name: 'navigate_to_page',
     description: `Navigate the visitor to a page on the site. Use the exact URL from the page list for ordinary pages.
@@ -74,6 +85,9 @@ const navigateToPageTool: BackendTool<NavigateToPageInput> = {
 }
 
 const searchKnowledgeBaseTool: BackendTool<{ query: string }> = {
+  displayName: 'Search Knowledge Base',
+  shortDescription: 'Looks up FAQ entries you\'ve written to answer visitor questions.',
+  category: 'utility',
   schema: {
     name: 'search_knowledge_base',
     description: 'Use this tool to search the site knowledge base for answers about policies, shipping, returns, hours, or ANY other question, even if it might sound stupid or unrelated to the website. Use this before answering any random question. The query will be matched against a collection of FAQ entries that the site owner can manage in the dashboard. If there are no relevant matches, do not return any results and answer the visitor based on your general knowledge.',
@@ -118,6 +132,9 @@ const searchKnowledgeBaseTool: BackendTool<{ query: string }> = {
 };
 
 const clearChatTool: BackendTool = {
+  displayName: 'Clear Chat',
+  shortDescription: 'Clears the conversation history when the visitor asks to start over.',
+  category: 'utility',
   schema: {
     name: 'clear_chat',
     description: 'Clear the chat conversation history and start fresh. Use this when the visitor asks to start over, clear the chat, or begin a new conversation.',
@@ -134,8 +151,8 @@ const clearChatTool: BackendTool = {
 };
 
 
-export async function buildToolRegistry(): Promise<Map<string, BackendTool<any>>> {
-  const tools: BackendTool<any>[] = [
+export async function buildToolRegistry(toolSettings?: ToolSettingsMap): Promise<Map<string, BackendTool<any>>> {
+  const allTools: BackendTool<any>[] = [
     ...storeTools,
     ...orderTools,
     searchKnowledgeBaseTool,
@@ -143,5 +160,22 @@ export async function buildToolRegistry(): Promise<Map<string, BackendTool<any>>
     navigateToPageTool,
     clearChatTool,
   ];
-  return new Map(tools.map((tool) => [tool.schema.name, tool]));
+
+  return new Map(
+    allTools
+      .filter((tool) => {
+        const config = toolSettings?.[tool.schema.name];
+        return config === undefined || config.enabled;
+      })
+      .map((tool) => {
+        const instruction = toolSettings?.[tool.schema.name]?.instruction?.trim();
+        if (instruction) {
+          return [tool.schema.name, {
+            ...tool,
+            schema: { ...tool.schema, description: `${tool.schema.description}\n\nSite owner instruction: ${instruction}` },
+          }];
+        }
+        return [tool.schema.name, tool];
+      })
+  );
 }

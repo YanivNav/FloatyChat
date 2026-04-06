@@ -26,6 +26,9 @@ const formatOrder: (order: orders.Order, fulfillments?: orderFulfillments.Fulfil
 }
 
 const getOrderStatusTool: BackendTool<{ order_number: string }> = {
+  displayName: 'Get Order Status',
+  shortDescription: 'Looks up a specific order by number to show payment and delivery status.',
+  category: 'orders',
   schema: {
     name: 'get_order_status',
     description: 'Look up a specific order by order number. Use when the visitor provides an order number and asks about payment status, fulfillment, estimated delivery, or tracking.',
@@ -56,6 +59,9 @@ const getOrderStatusTool: BackendTool<{ order_number: string }> = {
 };
 
 const listMyOrdersTool: BackendTool<{ limit?: number }> = {
+  displayName: 'List My Orders',
+  shortDescription: 'Shows a logged-in member their recent order history.',
+  category: 'orders',
   schema: {
     name: 'list_my_orders',
     description: "List the visitor's recent orders. Use when the visitor asks to see their orders or order history without providing a specific order number. Only works if the visitor is logged in.",
@@ -89,6 +95,9 @@ const listMyOrdersTool: BackendTool<{ limit?: number }> = {
 };
 
 const cancelOrderTool: BackendTool<{ order_number: string }> = {
+  displayName: 'Cancel Order',
+  shortDescription: 'Cancels an order on behalf of the visitor and sends a confirmation email.',
+  category: 'orders',
   schema: {
     name: 'cancel_order',
     description: 'Cancel an order by order number. Only works for logged-in members cancelling their own orders. Do not attempt if the order is already cancelled or fulfilled.',

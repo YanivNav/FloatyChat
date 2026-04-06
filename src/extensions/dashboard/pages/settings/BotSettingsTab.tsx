@@ -1,4 +1,4 @@
-import React, { type FC, useState, useEffect, useCallback } from 'react';
+import React, { type FC, useState, useEffect, useCallback, useRef } from 'react';
 import { Box, Button, Card, FormField, Input, Loader } from '@wix/design-system';
 import { items } from '@wix/data';
 import { dashboard } from '@wix/dashboard';
@@ -11,6 +11,8 @@ const BotSettingsTab: FC = () => {
   const [settings, setSettings] = useState<BotSettings>({ botName: DEFAULT_CHAT_SETTINGS.botName, greetingMessage: DEFAULT_CHAT_SETTINGS.greetingMessage });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
+  const hasLoadedRef = useRef(false);
 
   useEffect(() => {
     items.query(CHAT_SETTINGS_COLLECTION_ID)
@@ -20,8 +22,16 @@ const BotSettingsTab: FC = () => {
         if (item) setSettings(item);
       })
       .catch(() => {})
-      .finally(() => setLoading(false));
+      .finally(() => {
+        hasLoadedRef.current = true;
+        setLoading(false);
+      });
   }, []);
+
+  const handleChange = (field: keyof BotSettings, value: string) => {
+    setSettings((prev) => ({ ...prev, [field]: value }));
+    if (hasLoadedRef.current) setIsDirty(true);
+  };
 
   const handleSave = useCallback(async () => {
     setSaving(true);
@@ -33,6 +43,7 @@ const BotSettingsTab: FC = () => {
         setSettings((prev) => ({ ...prev, _id: inserted._id }));
       }
       await httpClient.fetchWithAuth(`${new URL(import.meta.url).origin}/api/settings`, { method: 'DELETE' });
+      setIsDirty(false);
       dashboard.showToast({ message: 'Settings saved.', type: 'success', timeout: 'normal' });
     } catch {
       dashboard.showToast({ message: 'Failed to save. Please try again.', type: 'error', timeout: 'none' });
@@ -57,19 +68,19 @@ const BotSettingsTab: FC = () => {
           <FormField label="Bot Display Name">
             <Input
               value={settings.botName}
-              onChange={(e) => setSettings((prev) => ({ ...prev, botName: e.target.value }))}
+              onChange={(e) => handleChange('botName', e.target.value)}
               placeholder={DEFAULT_CHAT_SETTINGS.botName}
             />
           </FormField>
           <FormField label="Greeting Message" infoContent="The first message visitors see when they open the chat.">
             <Input
               value={settings.greetingMessage}
-              onChange={(e) => setSettings((prev) => ({ ...prev, greetingMessage: e.target.value }))}
+              onChange={(e) => handleChange('greetingMessage', e.target.value)}
               placeholder={DEFAULT_CHAT_SETTINGS.greetingMessage}
             />
           </FormField>
           <Box>
-            <Button onClick={handleSave} disabled={saving}>
+            <Button onClick={handleSave} disabled={saving || !isDirty}>
               {saving ? 'Saving…' : 'Save'}
             </Button>
           </Box>

@@ -3,8 +3,10 @@ import Anthropic from '@anthropic-ai/sdk';
 import { buildToolRegistry, type BackendTool, type SendFn, type ToolContext, type ToolResult } from './tools/tools';
 import { initProductVersionHandler } from './tools/store/product-version-handler';
 import type { FrontendAction, VisitorContext } from '../../shared/types';
+import { parseToolSettings } from '../../shared/types';
 import { buildSystemPrompt } from './system-prompt';
 import { checkRateLimit } from './ratelimit';
+import { loadBotSettings } from './settings';
 
 interface ConversationMessage {
   role: 'user' | 'assistant';
@@ -125,7 +127,7 @@ function createSSEResponse(handler: (send: SendFn) => Promise<void>): Response {
 }
 
 export const POST: APIRoute = async ({ request }) => {
-  const rateLimitResponse = await checkRateLimit(request);
+  const rateLimitResponse = await checkRateLimit();
   if (rateLimitResponse) return rateLimitResponse;
 
   let body: SendMessageRequest;
@@ -147,7 +149,8 @@ export const POST: APIRoute = async ({ request }) => {
   }
 
   await initProductVersionHandler();
-  const [systemPrompt, registry] = await Promise.all([buildSystemPrompt(context), buildToolRegistry()]);
+  const [systemPrompt, botSettings] = await Promise.all([buildSystemPrompt(context), loadBotSettings()]);
+  const registry = await buildToolRegistry(parseToolSettings(botSettings.toolSettings));
   const tools = Array.from(registry.values()).map((t) => t.schema);
 
   const initialMessages: Anthropic.MessageParam[] = [

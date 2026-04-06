@@ -1,4 +1,5 @@
 import { Ratelimit } from "@upstash/ratelimit";
+import { auth } from "@wix/essentials";
 import { getRedis } from "./redis";
 
 let ratelimit: Ratelimit | null = null;
@@ -17,13 +18,13 @@ function getRatelimit(): Ratelimit | null {
   return ratelimit;
 }
 
-export async function checkRateLimit(request: Request): Promise<Response | null> {
+export async function checkRateLimit(): Promise<Response | null> {
   const limiter = getRatelimit();
   if (!limiter) return null;
 
-  const ip =
-    request.headers.get("x-forwarded-for")?.split(",")[0].trim() ?? "unknown";
-  const { success, limit, remaining, reset } = await limiter.limit(ip);
+  const tokenInfo = await auth.getTokenInfo();
+  const key = (tokenInfo.subjectId ?? "unknown").split(":")[0];
+  const { success, limit, remaining, reset } = await limiter.limit(key);
 
   if (!success) {
     return new Response(

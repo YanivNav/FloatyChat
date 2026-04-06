@@ -15,6 +15,7 @@ export const dataExtension = extensions.genericExtension({
           fields: [
             { key: 'botName', displayName: 'Bot Name', type: 'TEXT' },
             { key: 'greetingMessage', displayName: 'Greeting Message', type: 'TEXT' },
+            { key: 'toolSettings', displayName: 'Tool Settings', type: 'TEXT' },
           ],
           dataPermissions: {
             itemRead: 'CMS_EDITOR',

@@ -19,6 +19,10 @@ export interface AddToCartInput {
 }
 
 const searchProductsTool: BackendTool<SearchProductsInput> = {
+  displayName: 'Search Products',
+  shortDescription: 'Searches or browses your store catalog when visitors look for products.',
+  category: 'store',
+  instructionHint: 'e.g. "Only show products that are in stock"',
   schema: {
     name: 'search_products',
     description: `Search or browse the store catalog.
@@ -58,6 +62,9 @@ const searchProductsTool: BackendTool<SearchProductsInput> = {
 };
 
 const showProductsTool: BackendTool<{ products: Array<ProductCard> }> = {
+  displayName: 'Show Product Cards',
+  shortDescription: 'Displays product cards visually in the chat for visitors to browse.',
+  category: 'store',
   schema: {
     name: 'show_products',
     description: 'Display a selection of products to the visitor as cards. Call this after search_products with only the products you determined are relevant. Pass the product objects exactly as returned by search_products. Your text response should be very brief since the visitor will see the cards below the message.',
@@ -91,8 +98,11 @@ const showProductsTool: BackendTool<{ products: Array<ProductCard> }> = {
   },
 };
 
-
 const addToCartTool: BackendTool<AddToCartInput> = {
+  displayName: 'Add to Cart',
+  shortDescription: 'Adds a product to the visitor\'s cart on their behalf.',
+  category: 'store',
+  instructionHint: 'e.g. "Always confirm with the visitor before adding to cart"',
   schema: {
     name: 'add_to_cart',
     description: "Add a product to the visitor's cart. By default, add 1 to the quantity. If the user specifies a different quantity, use that instead. If the product has options/variants and the visitor hasn't specified them, use ask_clarification first. When the visitor provides variant choices such as size or color, include them in variant_options according to the available options the product has.",
@@ -137,6 +147,9 @@ const addToCartTool: BackendTool<AddToCartInput> = {
 };
 
 const proceedToCheckoutTool: BackendTool = {
+  displayName: 'Proceed to Checkout',
+  shortDescription: 'Sends the visitor to the checkout page when they\'re ready to buy.',
+  category: 'store',
   schema: {
     name: 'proceed_to_checkout',
     description: 'Navigate the visitor to the checkout page. Only call this after the visitor explicitly confirms they want to check out.',
@@ -153,6 +166,9 @@ const proceedToCheckoutTool: BackendTool = {
 };
 
 const removeFromCartTool: BackendTool<{ product_name: string }> = {
+  displayName: 'Remove from Cart',
+  shortDescription: 'Removes a product from the visitor\'s cart when they ask.',
+  category: 'store',
   schema: {
     name: 'remove_from_cart',
     description: "Remove a product from the visitor's cart by name. Use the product name exactly as it appears in the cart context.",
