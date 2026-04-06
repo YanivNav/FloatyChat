@@ -12,17 +12,18 @@ A Wix app published on the Wix App Market that adds an AI-powered chat assistant
 
 ---
 
-## Tech Stack Decisions
+## Tech Stack
 
 | Decision | Choice | Reason |
 |---|---|---|
 | App framework | Wix CLI | Code-first, local dev in VS Code, hot reload, same Wix API access as Blocks |
 | UI framework | React (CLI default) + Wix Design System | Comes with CLI scaffold |
 | Bot intelligence | Claude API (claude-sonnet-4-20250514) | Tool-use support for structured actions |
-| Claude integration | Raw `fetch` to Anthropic API | `@anthropic-ai/sdk` may not be on Wix npm approved list |
-| Streaming workaround | `wixRealtime` pub/sub | Wix backend has 14s timeout; realtime channels bypass it |
+| Claude integration | `@anthropic-ai/sdk` | Available on Wix npm |
+| Streaming | HTTP readable stream (SSE) | Wix backend has 14s timeout; SSE bypasses it |
 | Knowledge storage | Wix CMS collections (in app) | Public app CMS doesn't count against site quota |
-| Vector search | External provider (Pinecone or Supabase pgvector) | Velo can't run embedding workloads natively |
+| Rate limiting / caching | Upstash Redis | Serverless-friendly HTTP-based Redis |
+| Vector search | External provider (Pinecone or Supabase pgvector) | Wix can't run embedding workloads natively |
 
 ---
 
@@ -31,31 +32,32 @@ A Wix app published on the Wix App Market that adds an AI-powered chat assistant
 ### 1. Visitor Layer (Widget)
 What the end-user sees on the live site.
 - Floating chat button + expandable panel (Wix widget extension)
-- Message thread UI with streaming tokens via `wixRealtime`
+- Message thread UI with streaming tokens via SSE
 - Action feedback (cart update confirmations, navigation prompts)
-- Quick-reply suggestion chips
+- Product cards carousel
 
-### 2. Bot Engine (Velo Backend)
-The brain - Velo backend functions called from the widget.
-- **Intent router** - decides if message is FAQ / product search / action
+### 2. Bot Engine (Backend)
+The brain - Astro API routes called from the widget.
 - **Claude API caller** - sends messages + tool definitions, receives tool calls or text
 - **Action executor** - runs the tool calls Claude requests against Wix APIs
-- **Context manager** - maintains conversation history per session
-- **Clarification handler** - asks follow-up questions before executing destructive actions (e.g. checkout)
+- **Context manager** - maintains conversation history per session (last 20 messages)
+- **Clarification handler** - asks follow-up questions before executing actions (e.g. checkout)
 
 ### 3. Knowledge Base
 What the bot knows about the site.
-- **Site crawler** - indexes Wix pages, Stores products, CMS collections into vector embeddings
-- **Owner editor** - custom FAQs and answers added manually by site owner
+- **Owner editor** - custom FAQs and answers added manually by site owner ✅
+- **Wix Stores API** - live product/inventory data queried at runtime ✅
+- **Site crawler** - indexes Wix pages and CMS content into vector embeddings
 - **Vector store** - external DB storing embeddings for semantic search
-- **Wix Stores API** - live product/inventory data queried at runtime
 - **Sync scheduler** - re-indexes content when site data changes
 
 ### 4. Owner Dashboard
 Wix Dashboard page (installed automatically with the app).
-- Bot settings: persona name, tone, greeting message, restricted topics
-- Knowledge editor: add/edit/delete custom Q&A pairs, trigger manual re-index
-- Analytics: conversation count, action completion rate, top questions
+- Bot settings: persona name, greeting message ✅
+- Custom system prompt ✅
+- Knowledge editor: add/edit/delete custom Q&A pairs ✅
+- Tool customization: enable/disable tools, add custom instructions per tool
+- Analytics: conversation count, top questions, action completion rate
 
 ### 5. Monetization (App Market Tiers)
 | Tier | Limits | Features |
@@ -66,177 +68,98 @@ Wix Dashboard page (installed automatically with the app).
 
 ---
 
-## How Claude Tool-Use Works in This App
+## How Claude Tool-Use Works
 
-Instead of returning plain text, Claude can call structured "tools" that your backend executes. This is what enables real actions, not just answers.
-
-**Tool definitions sent to Claude on every request:**
-
-```json
-[
-  {
-    "name": "search_products",
-    "description": "Search the store catalog for products matching a query",
-    "input_schema": {
-      "type": "object",
-      "properties": {
-        "query": { "type": "string" },
-        "filters": {
-          "type": "object",
-          "properties": {
-            "color": { "type": "string" },
-            "max_price": { "type": "number" },
-            "category": { "type": "string" }
-          }
-        }
-      },
-      "required": ["query"]
-    }
-  },
-  {
-    "name": "add_to_cart",
-    "description": "Add a product variant to the visitor's cart",
-    "input_schema": {
-      "type": "object",
-      "properties": {
-        "product_id": { "type": "string" },
-        "quantity": { "type": "number" },
-        "variant_id": { "type": "string" }
-      },
-      "required": ["product_id", "quantity"]
-    }
-  },
-  {
-    "name": "ask_clarification",
-    "description": "Ask the visitor a follow-up question before proceeding",
-    "input_schema": {
-      "type": "object",
-      "properties": {
-        "question": { "type": "string" }
-      },
-      "required": ["question"]
-    }
-  },
-  {
-    "name": "navigate_to_page",
-    "description": "Navigate the visitor to a page on the site",
-    "input_schema": {
-      "type": "object",
-      "properties": {
-        "page_slug": { "type": "string" }
-      },
-      "required": ["page_slug"]
-    }
-  },
-  {
-    "name": "proceed_to_checkout",
-    "description": "Navigate the visitor to the checkout page",
-    "input_schema": {
-      "type": "object",
-      "properties": {
-        "confirm": { "type": "boolean" }
-      },
-      "required": ["confirm"]
-    }
-  },
-  {
-    "name": "fill_form",
-    "description": "Pre-fill a form on the current page with provided values",
-    "input_schema": {
-      "type": "object",
-      "properties": {
-        "field_values": {
-          "type": "object",
-          "additionalProperties": { "type": "string" }
-        }
-      },
-      "required": ["field_values"]
-    }
-  },
-  {
-    "name": "search_knowledge_base",
-    "description": "Search the site knowledge base for answers to visitor questions",
-    "input_schema": {
-      "type": "object",
-      "properties": {
-        "query": { "type": "string" }
-      },
-      "required": ["query"]
-    }
-  }
-]
-```
+Instead of returning plain text, Claude can call structured "tools" that the backend executes. This is what enables real actions, not just answers.
 
 **Request/response flow:**
 1. Visitor sends message
-2. Widget calls backend function, which immediately returns `"ok"` (avoids 14s timeout)
+2. Widget calls `/api/chat` via SSE
 3. Backend calls Claude API with message + tool definitions + conversation history
 4. Claude returns either text OR one/more tool calls
 5. Backend executes tool calls (Wix Stores API, wixData, wixLocation, etc.)
 6. Results are sent back to Claude for a final natural language response
-7. Each token/chunk is published to a `wixRealtime` channel
-8. Widget frontend is subscribed to that channel and renders tokens as they arrive
+7. Each chunk streams back to the widget as SSE events
+8. Widget renders tokens and dispatches frontend actions (cart, navigation, product cards)
 
 ---
 
-## The 14-Second Timeout Workaround
+## Current Tools
 
-Wix enforces a 14-second timeout on frontend→backend function calls. Claude API calls with tool use can easily exceed this. The solution:
-
-Use http streams
-
-## Key Technical Notes
-
-- **Claude API key** - store in environment variables
-- **Navigation from widget** - the widget is a native Wix component (not an iframe), so `wixLocation.to()` and `wixWindow` APIs work directly from widget frontend code
-- **Permissions required** - declare in app dashboard: Wix Stores read/write, CMS read/write, Contacts read/write
-- **Session state** - store conversation history in session storage; keep last N messages to avoid Claude context ballooning
-
----
-
-## V1 Build Order
-
-1. **Project scaffold** - Wix CLI app created, dev site running ✅
-2. **Chat widget UI** - floating button, expandable panel, message thread, input box ✅
-3. **Backend scaffolding** - backend function that calls Claude and returns a basic text response ✅
-4. **wixRealtime streaming** - wire up pub/sub so response streams token by token ✅ (used http readable stream instead)
-5. **Knowledge base (FAQ)** - CMS collection for Q&A pairs, basic retrieval ✅
-6. **Product search** - `search_products` tool wired to Wix Stores API ✅
-7. **Add to cart** - `add_to_cart` tool wired to `wixStoresBackend` ✅
-8. **Checkout flow** - clarification handler + `proceed_to_checkout` tool ✅
-9. **Site crawler** - index pages and products into vector store
-10. **Owner dashboard** - settings page, knowledge editor, analytics
-11. **Monetization gates** - enforce chat limits per tier
-12. **App Market prep** - permissions, listing, review
-
-## Next Features (Post-Current-State)
-
-### High impact
-- **Contextual greeting** - Use the page context (title/description) to make the opening message relevant, e.g. "I see you're looking at [product] - want to know more?" instead of a generic opener.
-- **Member context** - If the visitor is logged in (`@wix/members` / `@wix/identity`), pass their name and info to the bot for personalized responses.
-- **Customize System Prompt** - Lets the site owner further customize the bot by adding additional general info, constraints, guidance, set the tone, etc.
-- **Enable / Disable / Customize Tools** - Allow enabling, disabling, and changing settings of tools the bot can use
-
-### Additional Tools
-- **Orders** - Using `@wix/ecom` for orders API. Check for the user's shipping order status, cancel orders, etc.
-- **CMS/content search tool** - `search_content` backend tool that queries Wix CMS collections (blog posts, FAQs, forums, etc.) so the bot can answer questions beyond products. (Ties into V1 items 5 and 9.)
-- **Fill out forms** - The bot would be able to fill out forms in the site for the user, for example a contact form.
-- **Booking Support** - Lets the bot create booking orders, ask about available hours, cancel, etc.
-- **Event Registration** - Lets the bot order event tickets, check event dates, add the event to the visitor's calendar, etc.
-- **Restaurant Reservations** - Reserve a Restaurant for the visitor, provide opening hours info, questions about the menu, etc.
-- **Pricing Plans Support** - Questions about the pricing plans, order status, etc.
-
-### Polish / infrastructure
-- **Rate limiting** - `/api/chat` endpoint has no abuse protection.
-- **Conversation analytics** - Log conversations to a CMS collection so the site owner can see what visitors ask and where the bot falls short. (Ties into V1 item 10.)
-- **Clear chat button** - UX quality-of-life for visitors and for testing.
+| Tool | Status | Description |
+|---|---|---|
+| `search_products` | ✅ | Search or browse the store catalog |
+| `show_products` | ✅ | Display product cards to the visitor |
+| `add_to_cart` | ✅ | Add a product/variant to the cart |
+| `remove_from_cart` | ✅ | Remove a product from the cart |
+| `proceed_to_checkout` | ✅ | Navigate to checkout |
+| `navigate_to_page` | ✅ | Navigate to any page on the site |
+| `ask_clarification` | ✅ | Ask the visitor a follow-up question |
+| `search_knowledge_base` | ✅ | Search owner-managed FAQ entries |
+| `clear_chat` | ✅ | Clear the conversation history |
+| `get_orders` | ✅ | Look up the visitor's order history |
 
 ---
 
-## Out of Scope for V1
+## Completed
+
+- Project scaffold — Wix CLI app, dev site running ✅
+- Chat widget UI — floating button, expandable panel, message thread, input box ✅
+- Streaming backend — SSE response streams token by token ✅
+- Knowledge base (FAQ) — CMS collection for Q&A pairs, keyword retrieval ✅
+- Product search + browse — wired to Wix Stores API ✅
+- Add to cart / remove from cart ✅
+- Checkout flow — clarification handler + proceed to checkout ✅
+- Orders tool — order history lookup via `@wix/ecom` ✅
+- Owner dashboard — bot settings, system prompt, FAQ editor ✅
+- Rate limiting — Upstash Redis sliding window, 10 req/min per IP ✅
+- Settings cache — bot settings cached in Redis, invalidated on save ✅
+- Context window cap — history trimmed to last 20 messages ✅
+- Clear chat button ✅
+
+---
+
+## Up Next
+
+### Phase 1 — Tool Customization
+Allow site owners to control which tools the bot can use and how.
+- Enable / disable individual tools from the dashboard
+- Add a custom instruction/hint per tool (e.g. "only suggest products under $50")
+- Enabled tools + instructions passed to Claude at request time
+
+### Phase 2 — Site Crawling
+Index site content for semantic search, enabling the bot to answer questions about any page, policy, or piece of content on the site.
+- Site crawler — fetch and parse Wix pages, blog posts, CMS collections
+- Embed content chunks into a vector store (Pinecone or Supabase pgvector)
+- `search_content` backend tool — semantic search over indexed content
+- Sync scheduler — re-index when site content changes
+- Manual re-index trigger in the dashboard
+
+### Phase 3 — Publishing
+Everything needed to submit to the Wix App Market.
+- Usage analytics - dashboard tab for conversation count, top questions, action completion rate
+- Conversation analytics — log chats to CMS, view in dashboard analytics tab
+- Monetization gates — enforce Free/Starter/Pro tier chat limits (Upstash Redis counter)
+- App Market prep — permissions declaration, listing copy, review
+
+---
+
+## Additional Tools (Post-Launch)
+
+- **Contextual greeting** - tailor the opening message based on the current page
+- **Member context** - pass logged-in member name/info to Claude for personalization
+- **Fill out forms** - pre-fill contact or enquiry forms on behalf of the visitor
+- **Booking support** - create/cancel bookings, check availability (`@wix/bookings`)
+- **Event registration** - buy tickets, check event dates (`@wix/events`)
+- **Restaurant reservations** - reserve tables, show opening hours, answer menu questions
+- **Pricing plans** - answer questions about plans, check subscription status
+
+---
+
+## Out of Scope (for now)
 
 - Multi-language support
 - Voice input
 - Human handoff / live chat escalation
 - A/B testing bot personas
-- Custom branding (widget colors/fonts) - post-launch upsell
+- Custom widget branding (colors/fonts) — post-launch upsell

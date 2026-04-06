@@ -151,7 +151,7 @@ export const POST: APIRoute = async ({ request }) => {
   const tools = Array.from(registry.values()).map((t) => t.schema);
 
   const initialMessages: Anthropic.MessageParam[] = [
-    ...(history ?? []).map((h) => ({ role: h.role, content: h.content as string })),
+    ...(history ?? []).slice(-20).map((h) => ({ role: h.role, content: h.content as string })),
     { role: 'user', content: message.trim() },
   ];
 

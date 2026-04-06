@@ -21,7 +21,10 @@ export interface AddToCartInput {
 const searchProductsTool: BackendTool<SearchProductsInput> = {
   schema: {
     name: 'search_products',
-    description: `Search or browse the store catalog. Returns a list of matching products for you to review. After calling this, decide which results are actually relevant to the visitor's request, then call show_products with only those products. For navigation to a product page, use the slug from the results without calling show_products.`,
+    description: `Search or browse the store catalog.
+- When browse_all is true and no query: products are shown to the visitor automatically (below the response) — do NOT call show_products afterward.
+- When browse_all is true with a query (e.g. "what chairs do you sell?"): fetches all products so you can filter them. Call show_products with only the relevant matches.
+- When browse_all is false: returns matching products for you to review. Use the results to answer the visitor's question in text if they asked something specific (price, availability, description). Only call show_products if the visitor's intent is to browse or find products to buy, not for informational questions. For navigation to a product page, use the slug from the results without calling show_products.`,
     input_schema: {
       type: 'object',
       properties: {
@@ -31,19 +34,23 @@ const searchProductsTool: BackendTool<SearchProductsInput> = {
         },
         browse_all: {
           type: 'boolean',
-          description: 'Set to true when the visitor wants to browse the entire catalog or asks general questions like "what products do you sell?". Set to false when searching for a specific product. Also set to true if searching for a specific product returned no relevant results.',
+          description: 'Set to true when the visitor wants to browse the entire catalog or asks general questions like "what products do you sell?". Set to false when searching for a specific product.',
         },
         max_price: { type: 'number', description: 'Optional maximum price filter' },
-        limit: { type: 'number', description: 'Max number of results to return. Use 50 when browsing, 5 when searching for something specific.' },
-        page: { type: 'number', description: 'Page number for pagination, starting at 0. Only used when browse_all is true and if the previous search has no relevant results.' },
+        limit: { type: 'number', description: 'Max number of results to return. Use 12 when browsing, 5 when searching for something specific.' },
+        page: { type: 'number', description: 'Page number for pagination, starting at 0. Only used when browse_all is true.' },
       },
       required: ['browse_all', 'limit'],
     },
   },
-  execute: async (input) => {
+  execute: async (input, ctx) => {
     const result = await productVersionHandler.searchProducts(input);
     if (result.found && Array.isArray(result.products) && result.products.length > 0) {
       const cards = result.products.map((p) => productVersionHandler.toProductCard(p));
+      if (input.browse_all && !input.query) {
+        ctx.frontendActions.push({ type: 'show_products', products: cards });
+        return { shown: cards.length };
+      }
       return { found: true, products: cards };
     }
     return result;
@@ -53,7 +60,7 @@ const searchProductsTool: BackendTool<SearchProductsInput> = {
 const showProductsTool: BackendTool<{ products: Array<ProductCard> }> = {
   schema: {
     name: 'show_products',
-    description: 'Display a selection of products to the visitor as cards. Call this after search_products with only the products you determined are relevant. Pass the product objects exactly as returned by search_products. Your text response should be very brief since the visitor will see the cards.',
+    description: 'Display a selection of products to the visitor as cards. Call this after search_products with only the products you determined are relevant. Pass the product objects exactly as returned by search_products. Your text response should be very brief since the visitor will see the cards below the message.',
     input_schema: {
       type: 'object',
       properties: {
