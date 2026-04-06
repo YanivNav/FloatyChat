@@ -1,8 +1,8 @@
-# Wix AI Chat Assistant — Project Plan
+# Wix AI Chat Assistant - Project Plan
 
 ## Overview
 
-A Wix app published on the Wix App Market that adds an AI-powered chat assistant to any Wix website. Visitors can ask questions about the site, search for products, and perform actions like adding items to cart and proceeding to checkout — all through a conversational interface.
+A Wix app published on the Wix App Market that adds an AI-powered chat assistant to any Wix website. Visitors can ask questions about the site, search for products, and perform actions like adding items to cart and proceeding to checkout - all through a conversational interface.
 
 **Example interaction:**
 > User: "Buy me 2 blue shirts, 3 jeans and a pair of socks"
@@ -26,7 +26,7 @@ A Wix app published on the Wix App Market that adds an AI-powered chat assistant
 
 ---
 
-## Architecture — 5 Layers
+## Architecture - 5 Layers
 
 ### 1. Visitor Layer (Widget)
 What the end-user sees on the live site.
@@ -36,20 +36,20 @@ What the end-user sees on the live site.
 - Quick-reply suggestion chips
 
 ### 2. Bot Engine (Velo Backend)
-The brain — Velo backend functions called from the widget.
-- **Intent router** — decides if message is FAQ / product search / action
-- **Claude API caller** — sends messages + tool definitions, receives tool calls or text
-- **Action executor** — runs the tool calls Claude requests against Wix APIs
-- **Context manager** — maintains conversation history per session
-- **Clarification handler** — asks follow-up questions before executing destructive actions (e.g. checkout)
+The brain - Velo backend functions called from the widget.
+- **Intent router** - decides if message is FAQ / product search / action
+- **Claude API caller** - sends messages + tool definitions, receives tool calls or text
+- **Action executor** - runs the tool calls Claude requests against Wix APIs
+- **Context manager** - maintains conversation history per session
+- **Clarification handler** - asks follow-up questions before executing destructive actions (e.g. checkout)
 
 ### 3. Knowledge Base
 What the bot knows about the site.
-- **Site crawler** — indexes Wix pages, Stores products, CMS collections into vector embeddings
-- **Owner editor** — custom FAQs and answers added manually by site owner
-- **Vector store** — external DB storing embeddings for semantic search
-- **Wix Stores API** — live product/inventory data queried at runtime
-- **Sync scheduler** — re-indexes content when site data changes
+- **Site crawler** - indexes Wix pages, Stores products, CMS collections into vector embeddings
+- **Owner editor** - custom FAQs and answers added manually by site owner
+- **Vector store** - external DB storing embeddings for semantic search
+- **Wix Stores API** - live product/inventory data queried at runtime
+- **Sync scheduler** - re-indexes content when site data changes
 
 ### 4. Owner Dashboard
 Wix Dashboard page (installed automatically with the app).
@@ -187,39 +187,39 @@ Use http streams
 
 ## Key Technical Notes
 
-- **Claude API key** — store in environment variables
-- **Navigation from widget** — the widget is a native Wix component (not an iframe), so `wixLocation.to()` and `wixWindow` APIs work directly from widget frontend code
-- **Permissions required** — declare in app dashboard: Wix Stores read/write, CMS read/write, Contacts read/write
-- **Session state** — store conversation history in session storage; keep last N messages to avoid Claude context ballooning
+- **Claude API key** - store in environment variables
+- **Navigation from widget** - the widget is a native Wix component (not an iframe), so `wixLocation.to()` and `wixWindow` APIs work directly from widget frontend code
+- **Permissions required** - declare in app dashboard: Wix Stores read/write, CMS read/write, Contacts read/write
+- **Session state** - store conversation history in session storage; keep last N messages to avoid Claude context ballooning
 
 ---
 
 ## V1 Build Order
 
-1. **Project scaffold** — Wix CLI app created, dev site running ✅
-2. **Chat widget UI** — floating button, expandable panel, message thread, input box ✅
-3. **Backend scaffolding** — backend function that calls Claude and returns a basic text response ✅
-4. **wixRealtime streaming** — wire up pub/sub so response streams token by token ✅ (used http readable stream instead)
-5. **Knowledge base (FAQ)** — CMS collection for Q&A pairs, basic retrieval
-6. **Product search** — `search_products` tool wired to Wix Stores API ✅
-7. **Add to cart** — `add_to_cart` tool wired to `wixStoresBackend` ✅
-8. **Checkout flow** — clarification handler + `proceed_to_checkout` tool ✅
-9. **Site crawler** — index pages and products into vector store
-10. **Owner dashboard** — settings page, knowledge editor, analytics
-11. **Monetization gates** — enforce chat limits per tier
-12. **App Market prep** — permissions, listing, review
+1. **Project scaffold** - Wix CLI app created, dev site running ✅
+2. **Chat widget UI** - floating button, expandable panel, message thread, input box ✅
+3. **Backend scaffolding** - backend function that calls Claude and returns a basic text response ✅
+4. **wixRealtime streaming** - wire up pub/sub so response streams token by token ✅ (used http readable stream instead)
+5. **Knowledge base (FAQ)** - CMS collection for Q&A pairs, basic retrieval
+6. **Product search** - `search_products` tool wired to Wix Stores API ✅
+7. **Add to cart** - `add_to_cart` tool wired to `wixStoresBackend` ✅
+8. **Checkout flow** - clarification handler + `proceed_to_checkout` tool ✅
+9. **Site crawler** - index pages and products into vector store
+10. **Owner dashboard** - settings page, knowledge editor, analytics
+11. **Monetization gates** - enforce chat limits per tier
+12. **App Market prep** - permissions, listing, review
 
 ## Next Features (Post-Current-State)
 
 ### High impact
-- **Contextual greeting** — Use the page context (title/description) to make the opening message relevant, e.g. "I see you're looking at [product] — want to know more?" instead of a generic opener.
-- **Member context** — If the visitor is logged in (`@wix/members` / `@wix/identity`), pass their name and info to the bot for personalized responses.
+- **Contextual greeting** - Use the page context (title/description) to make the opening message relevant, e.g. "I see you're looking at [product] - want to know more?" instead of a generic opener.
+- **Member context** - If the visitor is logged in (`@wix/members` / `@wix/identity`), pass their name and info to the bot for personalized responses.
 - **Customize System Prompt** - Lets the site owner further customize the bot by adding additional general info, constraints, guidance, set the tone, etc.
 - **Enable / Disable / Customize Tools** - Allow enabling, disabling, and changing settings of tools the bot can use
 
 ### Additional Tools
-- **Orders** — Using `@wix/ecom` for orders API. Check for the user's shipping order status, cancel orders, etc.
-- **CMS/content search tool** — `search_content` backend tool that queries Wix CMS collections (blog posts, FAQs, forums, etc.) so the bot can answer questions beyond products. (Ties into V1 items 5 and 9.)
+- **Orders** - Using `@wix/ecom` for orders API. Check for the user's shipping order status, cancel orders, etc.
+- **CMS/content search tool** - `search_content` backend tool that queries Wix CMS collections (blog posts, FAQs, forums, etc.) so the bot can answer questions beyond products. (Ties into V1 items 5 and 9.)
 - **Fill out forms** - The bot would be able to fill out forms in the site for the user, for example a contact form.
 - **Booking Support** - Lets the bot create booking orders, ask about available hours, cancel, etc.
 - **Event Registration** - Lets the bot order event tickets, check event dates, add the event to the visitor's calendar, etc.
@@ -227,9 +227,9 @@ Use http streams
 - **Pricing Plans Support** - Questions about the pricing plans, order status, etc.
 
 ### Polish / infrastructure
-- **Rate limiting** — `/api/chat` endpoint has no abuse protection.
-- **Conversation analytics** — Log conversations to a CMS collection so the site owner can see what visitors ask and where the bot falls short. (Ties into V1 item 10.)
-- **Clear chat button** — UX quality-of-life for visitors and for testing.
+- **Rate limiting** - `/api/chat` endpoint has no abuse protection.
+- **Conversation analytics** - Log conversations to a CMS collection so the site owner can see what visitors ask and where the bot falls short. (Ties into V1 item 10.)
+- **Clear chat button** - UX quality-of-life for visitors and for testing.
 
 ---
 
@@ -239,4 +239,4 @@ Use http streams
 - Voice input
 - Human handoff / live chat escalation
 - A/B testing bot personas
-- Custom branding (widget colors/fonts) — post-launch upsell
+- Custom branding (widget colors/fonts) - post-launch upsell

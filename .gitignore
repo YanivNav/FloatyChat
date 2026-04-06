@@ -1,5 +1,8 @@
 # wix integration
 .wix/
+.claude/
+.agents/
+.gemini/
 
 # build output
 dist/
