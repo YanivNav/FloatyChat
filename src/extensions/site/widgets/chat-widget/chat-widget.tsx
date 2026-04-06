@@ -149,6 +149,12 @@ const ChatWidget: FC<ChatAssistantProps> = ({
         body: JSON.stringify({ message: text, history, context: { ...visitorContext, cart: await getCartItems() } }),
       });
 
+      if (res.status === 429) {
+        setIsTyping(false);
+        addMessage({ id: `bot-rl-${Date.now()}`, role: 'bot', text: "You're sending messages too fast. Please wait a moment and try again." });
+        return;
+      }
+
       if (!res.body) {
         const data = await res.json() as { text?: string; actions?: FrontendAction[]; error?: string };
         setIsTyping(false);

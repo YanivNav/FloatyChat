@@ -200,7 +200,7 @@ Use http streams
 2. **Chat widget UI** - floating button, expandable panel, message thread, input box ✅
 3. **Backend scaffolding** - backend function that calls Claude and returns a basic text response ✅
 4. **wixRealtime streaming** - wire up pub/sub so response streams token by token ✅ (used http readable stream instead)
-5. **Knowledge base (FAQ)** - CMS collection for Q&A pairs, basic retrieval
+5. **Knowledge base (FAQ)** - CMS collection for Q&A pairs, basic retrieval ✅
 6. **Product search** - `search_products` tool wired to Wix Stores API ✅
 7. **Add to cart** - `add_to_cart` tool wired to `wixStoresBackend` ✅
 8. **Checkout flow** - clarification handler + `proceed_to_checkout` tool ✅

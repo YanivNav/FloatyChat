@@ -1,5 +1,7 @@
 # wix integration
 .wix/
+
+# AI
 .claude/
 .agents/
 .gemini/

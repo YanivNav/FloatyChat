@@ -4,6 +4,7 @@ import { buildToolRegistry, type BackendTool, type SendFn, type ToolContext, typ
 import { initProductVersionHandler } from './tools/store/product-version-handler';
 import type { FrontendAction, VisitorContext } from '../../shared/types';
 import { buildSystemPrompt } from './system-prompt';
+import { checkRateLimit } from './ratelimit';
 
 interface ConversationMessage {
   role: 'user' | 'assistant';
@@ -124,6 +125,9 @@ function createSSEResponse(handler: (send: SendFn) => Promise<void>): Response {
 }
 
 export const POST: APIRoute = async ({ request }) => {
+  const rateLimitResponse = await checkRateLimit(request);
+  if (rateLimitResponse) return rateLimitResponse;
+
   let body: SendMessageRequest;
   try {
     body = (await request.json()) as SendMessageRequest;
