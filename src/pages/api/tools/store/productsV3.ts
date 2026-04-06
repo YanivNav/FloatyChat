@@ -1,8 +1,8 @@
 import { productsV3, readOnlyVariantsV3 } from "@wix/stores";
 import { ProductVersionHandler, type ProductSearchResult } from "./product-version-handler";
 import { auth } from "@wix/essentials";
-import type { ProductCard } from "../../../shared/types";
-import type { SearchProductsInput } from "../tools";
+import type { ProductCard } from "../../../../shared/types";
+import type { SearchProductsInput } from "./store-tools";
 
 export class ProductsV3Handler extends ProductVersionHandler<productsV3.V3Product> {
   async searchProducts(params: SearchProductsInput): Promise<ProductSearchResult> {

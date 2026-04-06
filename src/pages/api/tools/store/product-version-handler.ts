@@ -1,7 +1,7 @@
 import { auth } from '@wix/essentials';
 import { catalogVersioning, products, productsV3 } from '@wix/stores';
-import type { ProductCard } from '../../../shared/types';
-import type { AddToCartInput, SearchProductsInput } from '../tools';
+import type { ProductCard } from '../../../../shared/types';
+import type { AddToCartInput, SearchProductsInput } from './store-tools';
 
 export type ProductSearchResult =
   { found: false, message: string } |

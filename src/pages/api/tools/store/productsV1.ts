@@ -1,8 +1,8 @@
 import { products } from "@wix/stores";
 import { ProductVersionHandler, type ProductSearchResult } from "./product-version-handler";
-import type { ProductCard } from "../../../shared/types";
-import type { SearchProductsInput } from "../tools";
+import type { ProductCard } from "../../../../shared/types";
 import { auth } from "@wix/essentials";
+import type { SearchProductsInput } from "./store-tools";
 
 export class ProductsV1Handler extends ProductVersionHandler<products.Product> {
 
