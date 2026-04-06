@@ -7,6 +7,7 @@ export type ActionHandlerResult = 'continue' | 'stop';
 
 export interface ActionContext {
   addMessage: (message: Message) => void;
+  clearChat: () => void;
 }
 
 type ActionHandler<A extends FrontendAction> = (action: A, ctx: ActionContext) => Promise<ActionHandlerResult>;
@@ -59,6 +60,11 @@ const registry: ActionHandlerRegistry = {
       addMessage({ id: `bot-remove-err-${Date.now()}`, role: 'bot', text: 'Sorry, I could not remove that item from your cart.' });
       return 'stop';
     }
+  },
+
+  clear_chat: async (_action, { clearChat }) => {
+    clearChat();
+    return 'continue';
   },
 
   proceed_to_checkout: async () => {

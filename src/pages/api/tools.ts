@@ -388,6 +388,22 @@ const cancelOrderTool: BackendTool<{ order_number: string }> = {
   },
 };
 
+const clearChatTool: BackendTool = {
+  schema: {
+    name: 'clear_chat',
+    description: 'Clear the chat conversation history and start fresh. Use this when the visitor asks to start over, clear the chat, or begin a new conversation.',
+    input_schema: {
+      type: 'object',
+      properties: {},
+      required: [],
+    },
+  },
+  execute: async (_input, ctx) => {
+    ctx.frontendActions.push({ type: 'clear_chat' });
+    return { success: true };
+  },
+};
+
 const removeFromCartTool: BackendTool<{ product_name: string }> = {
   schema: {
     name: 'remove_from_cart',
@@ -418,6 +434,7 @@ export async function buildToolRegistry(): Promise<Map<string, BackendTool<any>>
     listMyOrdersTool,
     cancelOrderTool,
     removeFromCartTool,
+    clearChatTool,
     proceedToCheckoutTool,
   ];
   return new Map(tools.map((tool) => [tool.schema.name, tool]));

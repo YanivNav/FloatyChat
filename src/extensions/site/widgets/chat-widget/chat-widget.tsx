@@ -6,7 +6,7 @@ import { currentCart } from '@wix/ecom';
 import { window as siteWindow } from '@wix/site-window';
 import { site as wixSite } from "@wix/site-site";
 import { httpClient } from '@wix/essentials';
-import type { Message, FrontendAction, ProductCard, PageInfo, CartItem, VisitorContext } from './types';
+import type { Message, FrontendAction, ProductCard, PageInfo, CartItem, VisitorContext, BotSettings } from './types';
 import { handleActions as dispatchActions, addToCart } from './actions';
 import { loadChatState, saveChatState } from './utils/chatStorage';
 import { darkenColor } from './utils/colors';
@@ -14,16 +14,17 @@ import { TypingIndicator } from './components/TypingIndicator';
 import { ProductCarousel } from './components/ProductCarousel';
 import { MessageBubble } from './components/MessageBubble';
 import styles from './chat-widget.module.scss';
-import type { BotSettings } from '../../../../shared/types';
 import { DEFAULT_CHAT_SETTINGS } from '../../../../shared/chat-settings';
 import { seo } from '@wix/site-seo';
 
 interface ChatAssistantProps {
   primaryColor?: string;
+  previewOpen?: string;
 }
 
 const ChatWidget: FC<ChatAssistantProps> = ({
   primaryColor = '#116DFF',
+  previewOpen,
 }) => {
   const [botName, setBotName] = useState<string>('Loading...');
   const [isOpen, setIsOpen] = useState<boolean>(false);
@@ -36,6 +37,7 @@ const ChatWidget: FC<ChatAssistantProps> = ({
   const [visitorContext, setVisitorContext] = useState<VisitorContext>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   // Load chat state from session storage
   useEffect(() => {
@@ -64,6 +66,7 @@ const ChatWidget: FC<ChatAssistantProps> = ({
       })
   }, [isLoaded]);
 
+  // If we're in the editor, disable the toggle button and always show the chat if previewOpen is true
   useEffect(() => {
     siteWindow.viewMode()
       .then((mode) => setInEditor(mode === 'Editor'))
@@ -75,8 +78,9 @@ const ChatWidget: FC<ChatAssistantProps> = ({
     saveChatState({ isOpen, messages, hasGreeted });
   }, [isLoaded, hasGreeted, isOpen, messages]);
 
+  // Initialize visitor context
   useEffect(() => {
-    getVisitorContext()
+    createVisitorContext()
       .then((context) => setVisitorContext(context))
       .catch(() => {});
   }, []);
@@ -89,8 +93,25 @@ const ChatWidget: FC<ChatAssistantProps> = ({
     if (isOpen) setTimeout(() => inputRef.current?.focus(), 300);
   }, [isOpen]);
 
+  // Handle clicking outside the chat to close it
+  useEffect(() => {
+    if (!isOpen || inEditor) return;
+    const handleMouseDown = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleMouseDown);
+    return () => document.removeEventListener('mousedown', handleMouseDown);
+  }, [isOpen, inEditor]);
+
   const addMessage = useCallback((message: Message): void => {
     setMessages((prev) => [...prev, message]);
+  }, []);
+
+  const handleClearChat = useCallback((): void => {
+    setMessages([]);
+    setHasGreeted(false);
   }, []);
 
   const navigateToProduct = useCallback((slug: string): void => {
@@ -103,8 +124,8 @@ const ChatWidget: FC<ChatAssistantProps> = ({
   }, [addMessage]);
 
   const handleActions = useCallback((actions: FrontendAction[]): Promise<void> => {
-    return dispatchActions(actions, { addMessage });
-  }, [addMessage]);
+    return dispatchActions(actions, { addMessage, clearChat: handleClearChat });
+  }, [addMessage, handleClearChat]);
 
   const handleSend = useCallback(async (): Promise<void> => {
     const text = inputValue.trim();
@@ -193,6 +214,11 @@ const ChatWidget: FC<ChatAssistantProps> = ({
           <div className={styles.headerName}>{botName}</div>
           <div className={styles.headerStatus}>Online</div>
         </div>
+        <button onClick={handleClearChat} aria-label="Clear chat" className={styles.headerCloseBtn}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+            <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
         <button onClick={handleToggle} aria-label="Close chat" className={styles.headerCloseBtn}>
           <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
             <path d="M4 4L16 16M16 4L4 16" stroke="white" strokeWidth="2.2" strokeLinecap="round" />
@@ -257,24 +283,24 @@ const ChatWidget: FC<ChatAssistantProps> = ({
   }
 
   return (
-    <>
+    <div ref={containerRef} style={{ display: 'contents' }}>
       <style>{`
         .${styles.chatInput}:focus { border-color: ${primaryColor}; box-shadow: 0 0 0 3px ${primaryColor}22; }
         .${styles.sendButton}:not(:disabled):hover { background: ${darkenColor(primaryColor, 20)} !important; }
       `}</style>
       {renderToggleButton()}
-      {isOpen && !inEditor && (
+      {((!inEditor && isOpen) || (inEditor && previewOpen === 'true')) && (
         <div className={styles.panel}>
           {renderHeader()}
           {renderMessages()}
           {renderInputRow()}
         </div>
       )}
-    </>
+    </div>
   );
 };
 
-async function getVisitorContext(): Promise<VisitorContext> {
+async function createVisitorContext(): Promise<VisitorContext> {
   const [page, structure] = await Promise.all([getPageInfo(), wixSite.getSiteStructure()]);
   return { page, structure };
 }
@@ -355,6 +381,7 @@ async function readSSEStream(
 const customElement = reactToWebComponent(ChatWidget, React, ReactDOM, {
   props: {
     primaryColor: 'string',
+    previewOpen: 'string',
   },
 });
 

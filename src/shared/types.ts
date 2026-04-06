@@ -56,12 +56,17 @@ export interface RemoveFromCartAction {
   product_name: string;
 }
 
-export type FrontendAction = 
-| ShowProductsAction 
-| AddToCartAction 
-| NavigateToPageAction 
-| CheckoutAction 
-| RemoveFromCartAction;
+export interface ClearChatAction {
+  type: 'clear_chat';
+}
+
+export type FrontendAction =
+| ShowProductsAction
+| AddToCartAction
+| NavigateToPageAction
+| CheckoutAction
+| RemoveFromCartAction
+| ClearChatAction;
 
 
 export interface BotSettings extends Record<string, unknown> {
