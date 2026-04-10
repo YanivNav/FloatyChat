@@ -1,6 +1,7 @@
 import { auth } from "@wix/essentials";
 import type { VisitorContext } from "../../shared/types";
 import { siteProperties } from "@wix/business-tools";
+import { productVersionHandler } from "./tools/store/product-version-handler";
 
 type SiteProperties = Awaited<ReturnType<typeof siteProperties.getSiteProperties>>['properties'];
 
@@ -26,6 +27,10 @@ export async function buildSystemPrompt(context?: VisitorContext): Promise<strin
       buildCartSection(context),
       buildMemberSection(tokenInfo.subjectType),
     ];
+    if (productVersionHandler.isStoreInstalled()) {
+      sections.push(`The site has a store with the following product categories: ${Object.keys(await productVersionHandler.getCategories()).join(', ')}. 
+      If the user asks about a product, what's for sale, recommendations, pricing information, etc, use the available tools to find the information.`);
+    }
 
     return sections.filter(Boolean).join('\n\n');
   } catch (err) {
@@ -43,7 +48,10 @@ function buildIdentitySection(props: SiteProperties | undefined): string {
   if (description) section += ` ${description}`;
   else if (category) section += ` This is a ${category} business.`;
 
-  section += `\n\nYour role is to help visitors with questions about ${name} — its products, services, content, and any information related to this site. Only answer questions relevant to this website and its business. If a visitor asks about something unrelated, politely decline and redirect them to how you can help with ${name}.`;
+  section += `\n\nYour role is to help visitors with questions about ${name} 
+  - its products, services, content, and any information related to this site. 
+  Only answer questions relevant to this website and its business. 
+  If a visitor asks about something unrelated, politely decline and redirect them to how you can help with ${name}.`;
 
   return section;
 }
@@ -102,7 +110,7 @@ function buildCartSection(context: VisitorContext | undefined): string {
   if (!context.cart.length) return `The visitor's cart is currently empty.`;
 
   const summary = context.cart
-    .map((i) => `${i.quantity}x ${i.name}${i.variants ? ` (${i.variants})` : ''} — ${i.price}`)
+    .map((i) => `${i.quantity}x ${i.name}${i.variants ? ` (with options: ${i.variants})` : ''} - ${i.price}`)
     .join(', ');
   return `The visitor's current cart contains: ${summary}.`;
 }

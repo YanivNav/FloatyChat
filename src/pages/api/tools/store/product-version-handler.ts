@@ -1,6 +1,6 @@
 import { auth } from '@wix/essentials';
 import { catalogVersioning, products, productsV3 } from '@wix/stores';
-import type { ProductCard } from '../../../../shared/types';
+import type { ProductInfo, StoreCategory } from '../../../../shared/types';
 import type { AddToCartInput, SearchProductsInput } from './store-tools';
 
 export type ProductSearchResult =
@@ -11,7 +11,7 @@ export type ProductSearchResult =
 export abstract class ProductVersionHandler<P> {
   abstract searchProducts(params: SearchProductsInput): Promise<ProductSearchResult>;
 
-  abstract toProductCard(product: P): ProductCard;
+  abstract toProductInfo(product: P): ProductInfo;
 
   abstract resolveVariantId(productId: string, variantOptions: Record<string, string>): Promise<string | undefined>;
 
@@ -22,10 +22,16 @@ export abstract class ProductVersionHandler<P> {
     if (input.product_name) {
       const result = await this.searchProducts({ query: input.product_name, limit: 5, browse_all: false });
       if (result.found && Array.isArray(result.products) && result.products.length > 0) {
-        return result.products[0] as ProductSearchResult;
+        return { found: true, mode: 'search', products: result.products.slice(0, 1) };
       }
     }
     return { found: false, message: 'Product not found' };
+  }
+
+  abstract getCategories(): Promise<StoreCategory[]>;
+
+  isStoreInstalled(): boolean {
+    return true;
   }
 }
 
@@ -35,12 +41,20 @@ export class StoreNotInstalledHandler extends ProductVersionHandler<any> {
     return { found: false, message: 'There is no store in this site' };
   }
 
-  toProductCard(product: any): ProductCard {
+  toProductInfo(product: any): ProductInfo {
     throw new Error('Cannot create product card as the store is not installed.');
   }
 
   async resolveVariantId(productId: string, variantOptions: Record<string, string>): Promise<string | undefined> {
     return undefined;
+  }
+
+  override isStoreInstalled(): boolean {
+    return false;
+  }
+
+  getCategories(): Promise<StoreCategory[]> {
+    return Promise.resolve([]);
   }
 }
 
@@ -61,9 +75,11 @@ async function determineProductVersionHandler(): Promise<ProductVersionHandler<a
   if (catalogVersion === 'STORES_NOT_INSTALLED') {
     return notInstalled;
   } else if (catalogVersion === 'V3_CATALOG') {
+    console.log('Using Products V3');
     const { productsV3Handler } = await import('./productsV3');
     return productsV3Handler;
   } else {
+    console.log('Using Products V1');
     const { productsV1Handler } = await import('./productsV1');
     return productsV1Handler;
   }

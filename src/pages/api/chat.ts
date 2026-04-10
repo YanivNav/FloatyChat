@@ -19,7 +19,6 @@ interface SendMessageRequest {
   context?: VisitorContext;
 }
 
-
 async function executeTool(
   id: string,
   name: string,
@@ -36,6 +35,7 @@ async function executeTool(
   if (res.earlyExit) {
     return { earlyExit: true }
   }
+  console.log(`Tool result for ${name}:`, res);
   return { earlyExit: false, result: { type: 'tool_result', tool_use_id: id, content: JSON.stringify(res) } };
 }
 
@@ -50,9 +50,17 @@ async function runAgentLoop(
   const frontendActions: FrontendAction[] = [];
   const MAX_ITERATIONS = 5;
   let finalText = '';
+  let lastNonEmptyText = '';
 
   for (let i = 0; i < MAX_ITERATIONS; i++) {
     const apiStream = client.messages.stream({
+      cache_control: {
+        type: 'ephemeral',
+        ttl: '1h'
+      },
+      thinking: {
+        type: 'disabled'
+      },
       model: 'claude-sonnet-4-20250514',
       max_tokens: 1024,
       system: systemPrompt,
@@ -72,9 +80,11 @@ async function runAgentLoop(
     messages.push({ role: 'assistant', content: response.content });
 
     if (response.stop_reason === 'end_turn' || response.stop_reason !== 'tool_use') {
-      finalText = iterationText;
+      finalText = iterationText || lastNonEmptyText;
       break;
     }
+
+    if (iterationText) lastNonEmptyText = iterationText;
 
     const toolResults: Anthropic.ToolResultBlockParam[] = [];
     let earlyExit = false;
@@ -84,7 +94,7 @@ async function runAgentLoop(
       if (block.type !== 'tool_use') continue;
       const result = await executeTool(block.id, block.name, block.input, registry, ctx);
       if (result.earlyExit) {
-        finalText = iterationText; 
+        finalText = iterationText;
         earlyExit = true;
         break;
       } else {
@@ -114,6 +124,7 @@ function createSSEResponse(handler: (send: SendFn) => Promise<void>): Response {
       try {
         await handler(send);
       } catch (err) {
+        console.error('Error in chat handler:', err);
         send({ type: 'error', message: err instanceof Error ? err.message : String(err) });
       } finally {
         controller.close();

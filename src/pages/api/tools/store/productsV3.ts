@@ -1,8 +1,9 @@
 import { productsV3, readOnlyVariantsV3 } from "@wix/stores";
 import { ProductVersionHandler, type ProductSearchResult } from "./product-version-handler";
 import { auth } from "@wix/essentials";
-import type { ProductCard } from "../../../../shared/types";
+import type { ProductInfo, StoreCategory } from "../../../../shared/types";
 import type { SearchProductsInput } from "./store-tools";
+import { categories } from "@wix/categories";
 
 export class ProductsV3Handler extends ProductVersionHandler<productsV3.V3Product> {
   async searchProducts(params: SearchProductsInput): Promise<ProductSearchResult> {
@@ -23,14 +24,16 @@ export class ProductsV3Handler extends ProductVersionHandler<productsV3.V3Produc
     return { found: true, mode: shouldBrowseAll ? 'browse' : 'search', products: result.products };
   }
 
-  toProductCard(product: productsV3.V3Product): ProductCard {
+  toProductInfo(product: productsV3.V3Product): ProductInfo {
     return {
       id: product._id!,
       name: product.name!,
       price: product.actualPriceRange?.minValue?.formattedAmount ? product.actualPriceRange.minValue.formattedAmount : 'Price not available',
       imageUrl: product.media?.main?.thumbnail?.url,
       slug: product.slug!,
-      url: product.url!
+      url: product.url ?? `/product-page/${product.slug}`,
+      description: product.plainDescription ?? '',
+      variants: product.options ? Object.fromEntries(product.options.map(v => [v.name, v.choicesSettings?.choices?.map(c => c.name) ?? []])) : undefined
     };
   }
 
@@ -49,6 +52,15 @@ export class ProductsV3Handler extends ProductVersionHandler<productsV3.V3Produc
       ),
     );
     return variant?._id ?? undefined;
+  }
+
+  async getCategories(): Promise<StoreCategory[]> {
+    const results = await auth.elevate(categories.queryCategories)({}, {treeReference: {appNamespace: '@wix/stores'}});
+    return (results.categories ?? []).map((cat): StoreCategory => ({
+      id: cat._id!,
+      name: cat.name!,
+      slug: cat.slug!,
+    }));
   }
 
 }

@@ -37,7 +37,6 @@ export interface BackendTool<TInput = unknown> {
   instructionHint?: string;
 }
 
-
 const askClarificationTool: BackendTool<{ question: string }> = {
   displayName: 'Ask Clarification',
   shortDescription: 'Asks the visitor a follow-up question before taking an action.',
@@ -68,7 +67,8 @@ const navigateToPageTool: BackendTool<NavigateToPageInput> = {
     name: 'navigate_to_page',
     description: `Navigate the visitor to a page on the site. Use the exact URL from the page list for ordinary pages.
     For product pages, first call search_products to find the product, then use the slug from the results to construct the URL in the form of /product-page/{slug}. Do NOT call show_products in this case.
-    For product category pages, construct the URL in the form of /category/{category-slug}. All Products is a category page with the slug "all-products".`,
+    For product category pages, construct the URL in the form of /category/{category-slug}. All Products is a category page with the slug "all-products".
+    DO NOT navigate to the checkout page directly. Instead, use the "proceed_to_checkout" action if it exists.`,
     input_schema: {
       type: 'object',
       properties: {
@@ -156,7 +156,7 @@ export async function buildToolRegistry(toolSettings?: ToolSettingsMap): Promise
     ...storeTools,
     ...orderTools,
     searchKnowledgeBaseTool,
-    askClarificationTool,
+    // askClarificationTool,
     navigateToPageTool,
     clearChatTool,
   ];

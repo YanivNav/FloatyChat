@@ -1,12 +1,14 @@
 import { site as wixSite } from "@wix/site-site";
 
-export interface ProductCard {
+export interface ProductInfo {
   id: string;
   name: string;
   price: string;
   url: string;
   imageUrl?: string;
   slug: string;
+  description: string;
+  variants?: Record<string, string[]>;
 }
 
 export interface PageInfo {
@@ -22,6 +24,12 @@ export interface CartItem {
   variants?: string;
 }
 
+export interface StoreCategory {
+  id: string;
+  name: string;
+  slug: string;
+}
+
 export interface VisitorContext {
   structure?: Awaited<ReturnType<typeof wixSite.getSiteStructure>>;
   page?: PageInfo;
@@ -30,7 +38,7 @@ export interface VisitorContext {
 
 export interface ShowProductsAction {
   type: 'show_products';
-  products: ProductCard[];
+  products: ProductInfo[];
 }
 
 export interface AddToCartAction {

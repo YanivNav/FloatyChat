@@ -6,7 +6,7 @@ import { currentCart } from '@wix/ecom';
 import { window as siteWindow } from '@wix/site-window';
 import { site as wixSite } from "@wix/site-site";
 import { httpClient } from '@wix/essentials';
-import type { Message, FrontendAction, ProductCard, PageInfo, CartItem, VisitorContext, BotSettings } from './types';
+import type { Message, FrontendAction, ProductInfo, PageInfo, CartItem, VisitorContext, BotSettings } from './types';
 import { handleActions as dispatchActions, addToCart } from './actions';
 import { loadChatState, saveChatState } from './utils/chatStorage';
 import { darkenColor } from './utils/colors';
@@ -27,6 +27,7 @@ const ChatWidget: FC<ChatAssistantProps> = ({
   previewOpen,
 }) => {
   const [botName, setBotName] = useState<string>('Loading...');
+  const [botSettings, setBotSettings] = useState<BotSettings | null>(null);
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState<string>('');
@@ -57,14 +58,18 @@ const ChatWidget: FC<ChatAssistantProps> = ({
     httpClient.fetchWithAuth(`${new URL(import.meta.url).origin}/api/settings`)
       .then((res) => res.json())
       .catch(() => DEFAULT_CHAT_SETTINGS)
-      .then((data: BotSettings) => {
-        if (data.botName) setBotName(data.botName);
-        if (!hasGreeted) {
-          setMessages([{ id: 'greeting', role: 'bot', text: data.greetingMessage || DEFAULT_CHAT_SETTINGS.greetingMessage }]);
-          setHasGreeted(true);
-        }
-      })
+      .then(setBotSettings);
   }, [isLoaded]);
+
+  // Apply bot settings — runs when settings arrive or hasGreeted changes, so hasGreeted is always fresh
+  useEffect(() => {
+    if (!botSettings) return;
+    if (botSettings.botName) setBotName(botSettings.botName);
+    if (!hasGreeted) {
+      setMessages([{ id: 'greeting', role: 'bot', text: botSettings.greetingMessage || DEFAULT_CHAT_SETTINGS.greetingMessage }]);
+      setHasGreeted(true);
+    }
+  }, [botSettings, hasGreeted]);
 
   // If we're in the editor, disable the toggle button and always show the chat if previewOpen is true
   useEffect(() => {
@@ -118,9 +123,8 @@ const ChatWidget: FC<ChatAssistantProps> = ({
     siteLocation.to(`/product-page/${slug}`);
   }, []);
 
-  const handleProductAddToCart = useCallback(async (product: ProductCard): Promise<void> => {
-    await addToCart(product.id)
-      .catch(() => addMessage({ id: `bot-cart-err-${Date.now()}`, role: 'bot', text: `Sorry, I couldn't add ${product.name} to your cart.` }));
+  const handleProductAddToCart = useCallback(async (product: ProductInfo): Promise<void> => {
+    await sendMessage(`Add ${product.name} to cart`);
   }, [addMessage]);
 
   const handleActions = useCallback((actions: FrontendAction[]): Promise<void> => {
@@ -131,6 +135,10 @@ const ChatWidget: FC<ChatAssistantProps> = ({
     const text = inputValue.trim();
     if (!text || isTyping) return;
 
+    await sendMessage(text);
+  }, [inputValue, isTyping, messages, handleActions]);
+
+  const sendMessage = useCallback(async (text: string): Promise<void> => {
     addMessage({ id: `user-${Date.now()}`, role: 'user', text });
     setInputValue('');
     setIsTyping(true);
@@ -158,11 +166,8 @@ const ChatWidget: FC<ChatAssistantProps> = ({
       if (!res.body) {
         const data = await res.json() as { text?: string; actions?: FrontendAction[]; error?: string };
         setIsTyping(false);
-        addMessage({
-          id: `bot-${Date.now()}`,
-          role: 'bot',
-          text: data.error ? 'Sorry, something went wrong. Please try again.' : (data.text ?? ''),
-        });
+        const text = data.error ? 'Sorry, something went wrong. Please try again.' : (data.text ?? '');
+        if (text.trim()) addMessage({ id: `bot-${Date.now()}`, role: 'bot', text });
         if (data.actions?.length) handleActions(data.actions);
         return;
       }
@@ -176,7 +181,7 @@ const ChatWidget: FC<ChatAssistantProps> = ({
       });
       setIsTyping(false);
     }
-  }, [inputValue, isTyping, messages, handleActions]);
+  }, [isTyping, messages, handleActions, addMessage, visitorContext]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>): void => {
@@ -365,11 +370,12 @@ async function readSSEStream(
         pendingActions.push(event.action);
       } else if (event.type === 'done') {
         setIsTyping(false);
-        addMessage({ id: `bot-${Date.now()}`, role: 'bot', text: event.text ?? '' });
+        if (event.text?.trim()) addMessage({ id: `bot-${Date.now()}`, role: 'bot', text: event.text });
         if (pendingActions.length) handleActions(pendingActions);
         isDone = true;
         break;
       } else if (event.type === 'error') {
+        console.error('Error from chat stream:', event);
         setIsTyping(false);
         addMessage({ id: `bot-err-${Date.now()}`, role: 'bot', text: 'Sorry, something went wrong. Please try again.' });
         isDone = true;

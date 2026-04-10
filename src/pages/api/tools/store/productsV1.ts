@@ -1,6 +1,6 @@
-import { products } from "@wix/stores";
+import { collections, products } from "@wix/stores";
 import { ProductVersionHandler, type ProductSearchResult } from "./product-version-handler";
-import type { ProductCard } from "../../../../shared/types";
+import type { ProductInfo, StoreCategory } from "../../../../shared/types";
 import { auth } from "@wix/essentials";
 import type { SearchProductsInput } from "./store-tools";
 
@@ -34,14 +34,16 @@ export class ProductsV1Handler extends ProductVersionHandler<products.Product> {
     return { found: true, mode: 'search', products: items.slice(0, params.limit) };
   }
 
-  toProductCard(product: products.Product): ProductCard {
+  toProductInfo(product: products.Product): ProductInfo {
     return {
       id: product._id!,
       name: product.name!,
       price: product.priceData?.formatted?.discountedPrice ? product.priceData.formatted.discountedPrice : 'Price not available',
       imageUrl: product.media?.mainMedia?.image?.url,
       slug: product.slug!,
-      url: product.productPageUrl!.path!
+      url: product.productPageUrl?.path ?? `/product-page/${product.slug}`,
+      description: product.description ?? '',
+      variants: product.productOptions ? Object.fromEntries(product.productOptions.map(v => [v.name, v.choices?.map(c => c.value) ?? []])) : undefined
     };
   }
 
@@ -50,6 +52,15 @@ export class ProductsV1Handler extends ProductVersionHandler<products.Product> {
       choices: variantOptions,
     });
     return result.variants?.[0]?._id ?? undefined;
+  }
+
+  async getCategories(): Promise<StoreCategory[]> {
+    const results = await auth.elevate(collections.queryCollections)({});
+    return (results.collections ?? []).map((cat): StoreCategory => ({
+      id: cat._id!,
+      name: cat.name!,
+      slug: cat.slug!,
+    }));
   }
 
 }

@@ -1,4 +1,4 @@
-import type { AddToCartAction, ProductCard } from "../../../../shared/types";
+import type { AddToCartAction, ProductInfo } from "../../../../shared/types";
 import type { BackendTool } from "../tools";
 import { productVersionHandler } from "./product-version-handler";
 
@@ -25,10 +25,9 @@ const searchProductsTool: BackendTool<SearchProductsInput> = {
   instructionHint: 'e.g. "Only show products that are in stock"',
   schema: {
     name: 'search_products',
-    description: `Search or browse the store catalog.
-- When browse_all is true and no query: products are shown to the visitor automatically (below the response) — do NOT call show_products afterward.
-- When browse_all is true with a query (e.g. "what chairs do you sell?"): fetches all products so you can filter them. Call show_products with only the relevant matches.
-- When browse_all is false: returns matching products for you to review. Use the results to answer the visitor's question in text if they asked something specific (price, availability, description). Only call show_products if the visitor's intent is to browse or find products to buy, not for informational questions. For navigation to a product page, use the slug from the results without calling show_products.`,
+    description: `Use this to search or browse the store catalog. Use this tool when a visitor is looking for a product, asking about what's for sale, or asking for recommendations. The result contains a "products" array with full product data for your reference, and a "productCards" array with pre-formatted display cards. You MUST call the "show_products" tool immediately after using the "productCards" array as input (pass all of them or a filtered subset).
+If the visitor is looking for something specific, use the "query" field to search for it. If the visitor is just browsing or asking general questions like "what products do you have?", set "browse_all" to true and leave "query" empty to get a selection of products to show them. You can also use "browse_all" as a fallback if a search query returns no results, to show the visitor more options to choose from.
+When browsing with "browse_all", use the "page" and "limit" fields for pagination. Start with page 0. If there are more products to show, the response will include "hasNext: true", and you can increment the page number and call again to get the next set of products.`,
     input_schema: {
       type: 'object',
       properties: {
@@ -38,7 +37,8 @@ const searchProductsTool: BackendTool<SearchProductsInput> = {
         },
         browse_all: {
           type: 'boolean',
-          description: 'Set to true when the visitor wants to browse the entire catalog or asks general questions like "what products do you sell?". Set to false when searching for a specific product.',
+          description: `Set to true when the visitor wants to browse the entire catalog or asks general questions like "what products do you sell?". Set to false when searching for a specific product. 
+          If searching for a specific product returned no results, you can try setting browse_all to true in a second call to fetch all products and filter them yourself.`,
         },
         max_price: { type: 'number', description: 'Optional maximum price filter' },
         limit: { type: 'number', description: 'Max number of results to return. Use 12 when browsing, 5 when searching for something specific.' },
@@ -47,33 +47,34 @@ const searchProductsTool: BackendTool<SearchProductsInput> = {
       required: ['browse_all', 'limit'],
     },
   },
-  execute: async (input, ctx) => {
+  execute: async (input) => {
     const result = await productVersionHandler.searchProducts(input);
-    if (result.found && Array.isArray(result.products) && result.products.length > 0) {
-      const cards = result.products.map((p) => productVersionHandler.toProductCard(p));
-      if (input.browse_all && !input.query) {
-        ctx.frontendActions.push({ type: 'show_products', products: cards });
-        return { shown: cards.length };
-      }
-      return { found: true, products: cards };
-    }
-    return result;
+    if (!result.found) return result;
+    return {
+      found: true,
+      mode: result.mode,
+      hasNext: result.hasNext,
+      products: result.products,
+      productCards: result.products.map((p: any) => productVersionHandler.toProductInfo(p)),
+    };
   },
 };
 
-const showProductsTool: BackendTool<{ products: Array<ProductCard> }> = {
+const showProductsTool: BackendTool<{ products: ProductInfo[] }> = {
   displayName: 'Show Product Cards',
   shortDescription: 'Displays product cards visually in the chat for visitors to browse.',
   category: 'store',
   schema: {
     name: 'show_products',
-    description: 'Display a selection of products to the visitor as cards. Call this after search_products with only the products you determined are relevant. Pass the product objects exactly as returned by search_products. Your text response should be very brief since the visitor will see the cards below the message.',
+    description: `Display a selection of products to the visitor as cards. Call this after search_products with only the products you determined are relevant. 
+    Your text response should be very brief and just explain what kind of products are shown, since the visitor will see the cards below the message.
+    You may also use this when the visitor asks about what's in the cart.`,
     input_schema: {
       type: 'object',
       properties: {
         products: {
           type: 'array',
-          description: 'The products to display, selected from the search_products results.',
+          description: 'The products to display. Use the "productCards" array from search_products (or a filtered subset). Do NOT pass the full raw "products" array.',
           items: {
             type: 'object',
             properties: {
@@ -83,6 +84,8 @@ const showProductsTool: BackendTool<{ products: Array<ProductCard> }> = {
               slug: { type: 'string' },
               imageUrl: { type: 'string' },
               url: { type: 'string' },
+              description: { type: 'string' },
+              variants: { type: 'object', additionalProperties: { type: 'string' } }
             },
             required: ['id', 'name', 'price', 'slug'],
           },
@@ -105,7 +108,7 @@ const addToCartTool: BackendTool<AddToCartInput> = {
   instructionHint: 'e.g. "Always confirm with the visitor before adding to cart"',
   schema: {
     name: 'add_to_cart',
-    description: "Add a product to the visitor's cart. By default, add 1 to the quantity. If the user specifies a different quantity, use that instead. If the product has options/variants and the visitor hasn't specified them, use ask_clarification first. When the visitor provides variant choices such as size or color, include them in variant_options according to the available options the product has.",
+    description: "Add a product to the visitor's cart. By default, add 1 to the quantity. If the user specifies a different quantity, use that instead. If the product has options/variants and the visitor hasn't specified them, ask them first. When the visitor provides variant choices such as size or color, include them in variant_options according to the available options the product has.",
     input_schema: {
       type: 'object',
       properties: {
@@ -114,7 +117,7 @@ const addToCartTool: BackendTool<AddToCartInput> = {
         quantity: { type: 'number', description: 'Quantity to add' },
         variant_options: {
           type: 'object',
-          description: 'Optional product variant selections, for example { "size": "M", "color": "White" }. Use only when the visitor specified variant choices.',
+          description: 'Optional product variant selections, for example { "size": "M", "color": "White" }. If the product has variant options, this field is required.',
           additionalProperties: { type: 'string' },
         },
       },

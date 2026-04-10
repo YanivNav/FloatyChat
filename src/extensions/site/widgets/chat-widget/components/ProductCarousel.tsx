@@ -1,11 +1,11 @@
 import React, { type FC, useRef, useState, useCallback } from 'react';
-import type { ProductCard } from '../types';
+import type { ProductInfo } from '../types';
 import styles from '../chat-widget.module.scss';
 
 interface Props {
-  products: ProductCard[];
+  products: ProductInfo[];
   primaryColor: string;
-  onAddToCart: (p: ProductCard) => Promise<void>;
+  onAddToCart: (p: ProductInfo) => Promise<void>;
   onNavigate: (slug: string) => void;
 }
 
@@ -17,8 +17,9 @@ export const ProductCarousel: FC<Props> = ({ products, primaryColor, onAddToCart
     trackRef.current?.scrollBy({ left: dir * 126, behavior: 'smooth' });
   }, []);
 
-  const handleAddToCart = useCallback(async (p: ProductCard) => {
-    setAddedId(p.id);
+  const handleAddToCart = useCallback(async (p: ProductInfo) => {
+    if (!p.variants)
+      setAddedId(p.id);
     await onAddToCart(p);
     setTimeout(() => setAddedId((cur) => cur === p.id ? null : cur), 1500);
   }, [onAddToCart]);
