@@ -1,14 +1,20 @@
 import React, { type FC, useState, useEffect, useCallback, useRef } from 'react';
-import { Box, Button, Card, FormField, Input, Loader } from '@wix/design-system';
+import { Box, Button, Card, Loader } from '@wix/design-system';
 import { items } from '@wix/data';
 import { dashboard } from '@wix/dashboard';
 import { httpClient } from '@wix/essentials';
 import { DEFAULT_CHAT_SETTINGS } from '../../../../shared/chat-settings';
 import { CHAT_SETTINGS_COLLECTION_ID } from '../../../../shared/collection-utils';
 import type { BotSettings } from '../../../../shared/types';
+import BotSettingsFields from './BotSettingsFields';
 
 const BotSettingsTab: FC = () => {
-  const [settings, setSettings] = useState<BotSettings>({ botName: DEFAULT_CHAT_SETTINGS.botName, greetingMessage: DEFAULT_CHAT_SETTINGS.greetingMessage });
+  const [settings, setSettings] = useState<BotSettings>({
+    botName: DEFAULT_CHAT_SETTINGS.botName,
+    greetingMessage: DEFAULT_CHAT_SETTINGS.greetingMessage,
+    primaryColor: DEFAULT_CHAT_SETTINGS.primaryColor,
+    position: DEFAULT_CHAT_SETTINGS.position,
+  });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
@@ -65,20 +71,7 @@ const BotSettingsTab: FC = () => {
       <Card.Header title="Bot Configuration" />
       <Card.Content>
         <Box direction="vertical" gap="SP6">
-          <FormField label="Bot Display Name">
-            <Input
-              value={settings.botName}
-              onChange={(e) => handleChange('botName', e.target.value)}
-              placeholder={DEFAULT_CHAT_SETTINGS.botName}
-            />
-          </FormField>
-          <FormField label="Greeting Message" infoContent="The first message visitors see when they open the chat.">
-            <Input
-              value={settings.greetingMessage}
-              onChange={(e) => handleChange('greetingMessage', e.target.value)}
-              placeholder={DEFAULT_CHAT_SETTINGS.greetingMessage}
-            />
-          </FormField>
+          <BotSettingsFields settings={settings} onChange={handleChange} />
           <Box>
             <Button onClick={handleSave} disabled={saving || !isDirty}>
               {saving ? 'Saving…' : 'Save'}

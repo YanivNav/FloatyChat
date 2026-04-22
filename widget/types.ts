@@ -1,6 +1,6 @@
-import type { ProductInfo } from '../../../../shared/types';
+import type { ProductInfo } from '../src/shared/types';
 
-export * from '../../../../shared/types';
+export * from '../src/shared/types';
 
 export interface Message {
   id: string;

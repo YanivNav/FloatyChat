@@ -1,6 +1,4 @@
-import { location as siteLocation } from '@wix/site-location';
-import { currentCart } from '@wix/ecom';
-import { ecom } from '@wix/site-ecom';
+import { wixClient } from './wix-client';
 import type { FrontendAction, Message } from './types';
 
 export type ActionHandlerResult = 'continue' | 'stop';
@@ -27,7 +25,7 @@ const registry: ActionHandlerRegistry = {
   },
 
   navigate_to_page: async (action) => {
-    siteLocation.to(action.url);
+    wixClient.location.to(action.url);
     return 'stop';
   },
 
@@ -44,17 +42,17 @@ const registry: ActionHandlerRegistry = {
 
   remove_from_cart: async (action, { addMessage }) => {
     try {
-      const cart = await currentCart.getCurrentCart();
+      const cart = await wixClient.currentCart.getCurrentCart();
       const target = action.product_name.toLowerCase();
-      const lineItem = cart.lineItems?.find((item) =>
+      const lineItem = cart.lineItems?.find((item: any) =>
         (item.productName?.original ?? '').toLowerCase().includes(target)
       );
       if (!lineItem?._id) {
         addMessage({ id: `bot-remove-err-${Date.now()}`, role: 'bot', text: `I couldn't find "${action.product_name}" in your cart.` });
         return 'stop';
       }
-      await currentCart.removeLineItemsFromCurrentCart([lineItem._id]);
-      await ecom.refreshCart();
+      await wixClient.currentCart.removeLineItemsFromCurrentCart([lineItem._id]);
+      await wixClient.ecom.refreshCart();
       return 'continue';
     } catch {
       addMessage({ id: `bot-remove-err-${Date.now()}`, role: 'bot', text: 'Sorry, I could not remove that item from your cart.' });
@@ -68,8 +66,8 @@ const registry: ActionHandlerRegistry = {
   },
 
   proceed_to_checkout: async () => {
-    const res = await currentCart.createCheckoutFromCurrentCart();
-    await ecom.navigateToCheckoutPage(res.checkoutId!);
+    const res = await wixClient.currentCart.createCheckoutFromCurrentCart();
+    await wixClient.ecom.navigateToCheckoutPage(res.checkoutId!);
     return 'continue';
   },
 };
@@ -84,7 +82,7 @@ export async function handleActions(actions: FrontendAction[], ctx: ActionContex
 }
 
 export async function addToCart(productId: string, quantity = 1, variantId?: string): Promise<void> {
-  await currentCart.addToCurrentCart({
+  await wixClient.currentCart.addToCurrentCart({
     lineItems: [{
       catalogReference: {
         appId: STORES_APP_ID,
@@ -94,5 +92,5 @@ export async function addToCart(productId: string, quantity = 1, variantId?: str
       quantity: Math.max(1, Number(quantity)),
     }],
   });
-  await ecom.refreshCart();
+  await wixClient.ecom.refreshCart();
 }

@@ -1,31 +1,16 @@
 import React, { type FC, useState, useEffect, useRef, useCallback } from 'react';
-import ReactDOM from 'react-dom';
-import reactToWebComponent from 'react-to-webcomponent';
-import { location as siteLocation } from '@wix/site-location';
-import { currentCart } from '@wix/ecom';
-import { window as siteWindow } from '@wix/site-window';
-import { site as wixSite } from "@wix/site-site";
-import { httpClient } from '@wix/essentials';
+import { wixClient } from './wix-client';
 import type { Message, FrontendAction, ProductInfo, PageInfo, CartItem, VisitorContext, BotSettings } from './types';
-import { handleActions as dispatchActions, addToCart } from './actions';
+import { handleActions as dispatchActions } from './actions';
 import { loadChatState, saveChatState } from './utils/chatStorage';
 import { darkenColor } from './utils/colors';
 import { TypingIndicator } from './components/TypingIndicator';
 import { ProductCarousel } from './components/ProductCarousel';
 import { MessageBubble } from './components/MessageBubble';
 import styles from './chat-widget.module.scss';
-import { DEFAULT_CHAT_SETTINGS } from '../../../../shared/chat-settings';
-import { seo } from '@wix/site-seo';
+import { DEFAULT_CHAT_SETTINGS } from '../src/shared/chat-settings';
 
-interface ChatAssistantProps {
-  primaryColor?: string;
-  previewOpen?: string;
-}
-
-const ChatWidget: FC<ChatAssistantProps> = ({
-  primaryColor = '#116DFF',
-  previewOpen,
-}) => {
+const ChatWidget: FC = () => {
   const [botName, setBotName] = useState<string>('Loading...');
   const [botSettings, setBotSettings] = useState<BotSettings | null>(null);
   const [isOpen, setIsOpen] = useState<boolean>(false);
@@ -34,11 +19,13 @@ const ChatWidget: FC<ChatAssistantProps> = ({
   const [isTyping, setIsTyping] = useState<boolean>(false);
   const [hasGreeted, setHasGreeted] = useState<boolean>(false);
   const [isLoaded, setIsLoaded] = useState<boolean>(false);
-  const [inEditor, setInEditor] = useState<boolean>(false);
   const [visitorContext, setVisitorContext] = useState<VisitorContext>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  const primaryColor = botSettings?.primaryColor ?? '#116DFF';
+  const position = botSettings?.position ?? 'bottom-right';
 
   // Load chat state from session storage
   useEffect(() => {
@@ -55,8 +42,8 @@ const ChatWidget: FC<ChatAssistantProps> = ({
   // Load bot settings (only after storage state is restored)
   useEffect(() => {
     if (!isLoaded) return;
-    httpClient.fetchWithAuth(`${new URL(import.meta.url).origin}/api/settings`)
-      .then((res) => res.json())
+    wixClient.fetchWithAuth(`${new URL(import.meta.url).origin}/api/settings`)
+      .then((res: Response) => res.json())
       .catch(() => DEFAULT_CHAT_SETTINGS)
       .then(setBotSettings);
   }, [isLoaded]);
@@ -70,13 +57,6 @@ const ChatWidget: FC<ChatAssistantProps> = ({
       setHasGreeted(true);
     }
   }, [botSettings, hasGreeted]);
-
-  // If we're in the editor, disable the toggle button and always show the chat if previewOpen is true
-  useEffect(() => {
-    siteWindow.viewMode()
-      .then((mode) => setInEditor(mode === 'Editor'))
-      .catch(() => setInEditor(!!(window as any).Wix));
-  }, []);
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -100,7 +80,7 @@ const ChatWidget: FC<ChatAssistantProps> = ({
 
   // Handle clicking outside the chat to close it
   useEffect(() => {
-    if (!isOpen || inEditor) return;
+    if (!isOpen) return;
     const handleMouseDown = (e: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
         setIsOpen(false);
@@ -108,7 +88,7 @@ const ChatWidget: FC<ChatAssistantProps> = ({
     };
     document.addEventListener('mousedown', handleMouseDown);
     return () => document.removeEventListener('mousedown', handleMouseDown);
-  }, [isOpen, inEditor]);
+  }, [isOpen]);
 
   const addMessage = useCallback((message: Message): void => {
     setMessages((prev) => [...prev, message]);
@@ -120,7 +100,7 @@ const ChatWidget: FC<ChatAssistantProps> = ({
   }, []);
 
   const navigateToProduct = useCallback((slug: string): void => {
-    siteLocation.to(`/product-page/${slug}`);
+    wixClient.location.to(`/product-page/${slug}`);
   }, []);
 
   const handleProductAddToCart = useCallback(async (product: ProductInfo): Promise<void> => {
@@ -151,7 +131,7 @@ const ChatWidget: FC<ChatAssistantProps> = ({
       }));
 
     try {
-      const res = await httpClient.fetchWithAuth(`${new URL(import.meta.url).origin}/api/chat`, {
+      const res = await wixClient.fetchWithAuth(`${new URL(import.meta.url).origin}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: text, history, context: { ...visitorContext, cart: await getCartItems() } }),
@@ -173,7 +153,8 @@ const ChatWidget: FC<ChatAssistantProps> = ({
       }
 
       await readSSEStream(res.body, handleActions, setIsTyping, addMessage);
-    } catch {
+    } catch (err) {
+      console.error('[floaty-chat] sendMessage error:', err);
       addMessage({
         id: `bot-err-${Date.now()}`,
         role: 'bot',
@@ -192,13 +173,18 @@ const ChatWidget: FC<ChatAssistantProps> = ({
 
   const handleToggle = useCallback((): void => setIsOpen((prev) => !prev), []);
 
+  const toggleButtonStyle: React.CSSProperties = {
+    background: primaryColor,
+    ...(position === 'bottom-left' ? { left: '20px', right: 'unset' } : { right: '20px' }),
+  };
+
   function renderToggleButton() {
     return (
       <button
-        className={inEditor ? styles.toggleButtonEditor : styles.toggleButton}
-        onClick={inEditor ? undefined : handleToggle}
+        className={styles.toggleButton}
+        onClick={handleToggle}
         aria-label={isOpen ? 'Close chat' : 'Open chat'}
-        style={{ background: primaryColor }}
+        style={toggleButtonStyle}
       >
         {isOpen ? (
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
@@ -300,7 +286,7 @@ const ChatWidget: FC<ChatAssistantProps> = ({
         .${styles.sendButton}:not(:disabled):hover { background: ${darkenColor(primaryColor, 20)} !important; }
       `}</style>
       {renderToggleButton()}
-      {((!inEditor && isOpen) || (inEditor && previewOpen === 'true')) && (
+      {isOpen && (
         <div className={styles.panel}>
           {renderHeader()}
           {renderMessages()}
@@ -312,28 +298,27 @@ const ChatWidget: FC<ChatAssistantProps> = ({
 };
 
 async function createVisitorContext(): Promise<VisitorContext> {
-  const [page, structure] = await Promise.all([getPageInfo(), wixSite.getSiteStructure()]);
+  const [page, structure] = await Promise.all([getPageInfo(), wixClient.wixSite.getSiteStructure()]);
   return { page, structure };
 }
 
 async function getPageInfo(): Promise<PageInfo> {
-  const page = await wixSite.currentPage()
-  const meta = await seo.metaTags()
-  const title = await seo.title()
-  const description = meta.find(m => m.name === 'description')?.content;
-
+  const page = await wixClient.wixSite.currentPage();
+  const meta = await wixClient.seo.metaTags();
+  const title = await wixClient.seo.title();
+  const description = meta.find((m: any) => m.name === 'description')?.content;
   return { url: (page as any).url, title, description };
 }
 
 async function getCartItems(): Promise<CartItem[]> {
   try {
-    const cart = await currentCart.getCurrentCart();
-    return (cart.lineItems ?? []).map((item) => ({
+    const cart = await wixClient.currentCart.getCurrentCart();
+    return (cart.lineItems ?? []).map((item: any) => ({
       name: item.productName?.original ?? '',
       quantity: item.quantity ?? 1,
-      price: item.price?.formattedAmount ?? (item.price as any)?.amount ?? '',
+      price: item.price?.formattedAmount ?? item.price?.amount ?? '',
       variants: item.descriptionLines
-        ?.map((l) => `${l.name?.original}: ${l.plainText?.original ?? l.colorInfo?.original ?? ''}`)
+        ?.map((l: any) => `${l.name?.original}: ${l.plainText?.original ?? l.colorInfo?.original ?? ''}`)
         .join(', ') || undefined,
     }));
   } catch {
@@ -390,11 +375,4 @@ async function readSSEStream(
   }
 }
 
-const customElement = reactToWebComponent(ChatWidget, React, ReactDOM, {
-  props: {
-    primaryColor: 'string',
-    previewOpen: 'string',
-  },
-});
-
-export default customElement;
+export default ChatWidget;

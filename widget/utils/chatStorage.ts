@@ -1,4 +1,3 @@
-import { session } from '@wix/site-storage';
 import type { Message } from '../types';
 
 export interface StoredChatState {
@@ -11,7 +10,7 @@ const CHAT_SESSION_STORAGE_KEY = 'floaty-chat.widget-state';
 
 export async function loadChatState(): Promise<StoredChatState | null> {
   try {
-    const raw = await session.getItem(CHAT_SESSION_STORAGE_KEY);
+    const raw = sessionStorage.getItem(CHAT_SESSION_STORAGE_KEY);
     if (!raw) return null;
 
     const parsed = JSON.parse(raw) as Partial<StoredChatState>;
@@ -29,7 +28,7 @@ export async function loadChatState(): Promise<StoredChatState | null> {
 
 export async function saveChatState(state: StoredChatState): Promise<void> {
   try {
-    await session.setItem(CHAT_SESSION_STORAGE_KEY, JSON.stringify(state));
+    sessionStorage.setItem(CHAT_SESSION_STORAGE_KEY, JSON.stringify(state));
   } catch {
     // Ignore storage failures so chat still works when storage is blocked.
   }

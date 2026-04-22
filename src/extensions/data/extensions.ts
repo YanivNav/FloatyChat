@@ -16,6 +16,9 @@ export const dataExtension = extensions.genericExtension({
             { key: 'botName', displayName: 'Bot Name', type: 'TEXT' },
             { key: 'greetingMessage', displayName: 'Greeting Message', type: 'TEXT' },
             { key: 'toolSettings', displayName: 'Tool Settings', type: 'TEXT' },
+            { key: 'primaryColor', displayName: 'Primary Color', type: 'TEXT' },
+            { key: 'position', displayName: 'Position', type: 'TEXT' },
+            { key: 'isInstalled', displayName: 'Is Installed', type: 'BOOLEAN' },
           ],
           dataPermissions: {
             itemRead: 'CMS_EDITOR',

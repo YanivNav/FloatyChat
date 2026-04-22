@@ -82,6 +82,9 @@ export interface BotSettings extends Record<string, unknown> {
   botName: string;
   greetingMessage: string;
   toolSettings?: string; // JSON-serialized ToolSettingsMap
+  primaryColor?: string;
+  position?: 'bottom-right' | 'bottom-left';
+  isInstalled?: boolean;
 }
 
 export interface ToolConfig {

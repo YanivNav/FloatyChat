@@ -22,8 +22,13 @@ export async function checkRateLimit(): Promise<Response | null> {
   const limiter = getRatelimit();
   if (!limiter) return null;
 
-  const tokenInfo = await auth.getTokenInfo();
-  const key = (tokenInfo.subjectId ?? "unknown").split(":")[0];
+  let key: string;
+  try {
+    const tokenInfo = await auth.getTokenInfo();
+    key = (tokenInfo.subjectId ?? "unknown").split(":")[0];
+  } catch {
+    key = "anonymous";
+  }
   const { success, limit, remaining, reset } = await limiter.limit(key);
 
   if (!success) {

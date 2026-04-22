@@ -11,12 +11,14 @@
     "preview": "wix preview",
     "release": "wix release",
     "generate": "wix generate",
-    "skills": "wix skills"
+    "skills": "wix skills",
+    "build:widget": "vite build --config vite.widget.config.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.82.0",
     "@upstash/ratelimit": "^2.0.8",
     "@upstash/redis": "^1.37.0",
+    "@wix/app-management": "^1.0.148",
     "@wix/astro": "^2.13.0",
     "@wix/business-tools": "^1.0.220",
     "@wix/categories": "^1.0.186",
@@ -26,6 +28,7 @@
     "@wix/ecom": "^1.0.1996",
     "@wix/editor": "^1.356.0",
     "@wix/essentials": "^0.1.23",
+    "@wix/sdk": "^1.21.6",
     "@wix/site": "^1.56.0",
     "@wix/site-ecom": "^1.14.0",
     "@wix/site-location": "^1.34.0",
@@ -44,11 +47,14 @@
     "@types/node": "^25.5.2",
     "@types/react": "^18.3.1",
     "@types/react-dom": "^18.3.1",
-    "@wix/cli": "^1.1.135",
+    "@vitejs/plugin-react": "^6.0.1",
+    "@wix/cli": "^1.1.178",
     "@wix/sdk-types": "^1.0.0",
     "patch-package": "^8.0.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "sass-embedded": "^1.99.0"
+    "sass-embedded": "^1.99.0",
+    "vite": "^8.0.9",
+    "vite-plugin-css-injected-by-js": "^5.0.1"
   }
 }
