@@ -5,16 +5,11 @@ import type { FaqEntry, FrontendAction, ToolSettingsMap } from '../../../shared/
 import { FAQ_COLLECTION_ID } from '../../../shared/collection-utils';
 import storeTools from "./store/store-tools";
 import orderTools from "./orders";
+import navigationTools from "./navigation";
 
 export interface Page {
   name: string;
   url: string;
-}
-
-export interface NavigateToPageInput {
-  url: string;
-  name?: string;
-  product_slug?: string;
 }
 
 export type SendFn = (event: object) => void;
@@ -35,53 +30,6 @@ export interface BackendTool<TInput = unknown> {
   shortDescription: string;
   category: 'store' | 'orders' | 'navigation' | 'utility';
   instructionHint?: string;
-}
-
-const askClarificationTool: BackendTool<{ question: string }> = {
-  displayName: 'Ask Clarification',
-  shortDescription: 'Asks the visitor a follow-up question before taking an action.',
-  category: 'utility',
-  schema: {
-    name: 'ask_clarification',
-    description: 'Ask the visitor a follow-up question before proceeding, e.g. to clarify size, color, or quantity.',
-    input_schema: {
-      type: 'object',
-      properties: {
-        question: { type: 'string', description: 'The clarifying question to ask' },
-      },
-      required: ['question'],
-    },
-  },
-  execute: async (input, ctx) => {
-    ctx.send({ type: 'token', text: input.question });
-    return { earlyExit: true };
-  },
-};
-
-const navigateToPageTool: BackendTool<NavigateToPageInput> = {
-  displayName: 'Navigate to Page',
-  shortDescription: 'Sends the visitor to a page on your site when they ask to go somewhere.',
-  category: 'navigation',
-  instructionHint: 'e.g. "Always navigate to /contact instead of /about"',
-  schema: {
-    name: 'navigate_to_page',
-    description: `Navigate the visitor to a page on the site. Use the exact URL from the page list for ordinary pages.
-    For product pages, first call search_products to find the product, then use the slug from the results to construct the URL in the form of /product-page/{slug}. Do NOT call show_products in this case.
-    For product category pages, construct the URL in the form of /category/{category-slug}. All Products is a category page with the slug "all-products".
-    DO NOT navigate to the checkout page directly. Instead, use the "proceed_to_checkout" action if it exists.`,
-    input_schema: {
-      type: 'object',
-      properties: {
-        url: { type: 'string', description: 'The page URL to navigate to, e.g. "/shop" or "/about"' },
-        name: { type: 'string', description: 'The human-readable page name for confirmation messaging' },
-      },
-      required: ['url'],
-    },
-  },
-  execute: async (input, ctx) => {
-    ctx.frontendActions.push({ type: 'navigate_to_page', ...input });
-    return { success: true, resolvedUrl: input.url };
-  },
 }
 
 const searchKnowledgeBaseTool: BackendTool<{ query: string }> = {
@@ -155,9 +103,8 @@ export async function buildToolRegistry(toolSettings?: ToolSettingsMap): Promise
   const allTools: BackendTool<any>[] = [
     ...storeTools,
     ...orderTools,
+    ...navigationTools,
     searchKnowledgeBaseTool,
-    // askClarificationTool,
-    navigateToPageTool,
     clearChatTool,
   ];
 

@@ -6,6 +6,7 @@ import { productVersionHandler } from "./product-version-handler";
 export interface SearchProductsInput {
   query?: string;
   browse_all: boolean;
+  show_cards: boolean;
   max_price?: number;
   limit: number;
   page?: number;
@@ -25,37 +26,45 @@ const searchProductsTool: BackendTool<SearchProductsInput> = {
   instructionHint: 'e.g. "Only show products that are in stock"',
   schema: {
     name: 'search_products',
-    description: `Use this to search or browse the store catalog. Use this tool when a visitor is looking for a product, asking about what's for sale, or asking for recommendations. The result contains a "products" array with full product data for your reference, and a "productCards" array with pre-formatted display cards. You MUST call the "show_products" tool immediately after using the "productCards" array as input (pass all of them or a filtered subset).
-If the visitor is looking for something specific, use the "query" field to search for it. If the visitor is just browsing or asking general questions like "what products do you have?", set "browse_all" to true and leave "query" empty to get a selection of products to show them. You can also use "browse_all" as a fallback if a search query returns no results, to show the visitor more options to choose from.
-When browsing with "browse_all", use the "page" and "limit" fields for pagination. Start with page 0. If there are more products to show, the response will include "hasNext: true", and you can increment the page number and call again to get the next set of products.`,
+    description: `Retrieve products from the store catalog. Call this whenever a visitor asks about products, what's for sale, prices, availability, or wants recommendations. Do NOT generate any text before calling this tool.
+
+Set show_cards=true when the visitor wants to see or browse products (e.g. "what do you sell?", "show me something", "any gift ideas?", "do you have sneakers?"). The cards will be displayed automatically.
+Set show_cards=false when answering a factual question about a specific product (e.g. "what sizes does the blue shirt come in?", "how much is product X?"). Answer from the returned data instead.
+
+- Use query for specific product searches ("blue shirt", "running shoes under $50")
+- Use browse_all: true for general browsing or when a specific search returns no results
+- Use limit=12 when browsing, limit=5 when searching for something specific`,
     input_schema: {
       type: 'object',
       properties: {
-        query: {
-          type: 'string',
-          description: 'Search phrase, e.g. "blue shirt", "running shoes". Leave empty only when browse_all is true.',
-        },
-        browse_all: {
-          type: 'boolean',
-          description: `Set to true when the visitor wants to browse the entire catalog or asks general questions like "what products do you sell?". Set to false when searching for a specific product. 
-          If searching for a specific product returned no results, you can try setting browse_all to true in a second call to fetch all products and filter them yourself.`,
-        },
-        max_price: { type: 'number', description: 'Optional maximum price filter' },
-        limit: { type: 'number', description: 'Max number of results to return. Use 12 when browsing, 5 when searching for something specific.' },
+        query: { type: 'string', description: 'Search phrase. Leave empty when browse_all is true.' },
+        browse_all: { type: 'boolean', description: 'True to browse the full catalog, false for a specific search.' },
+        show_cards: { type: 'boolean', description: 'True to display product cards to the visitor, false to just retrieve data for answering a question.' },
+        max_price: { type: 'number', description: 'Optional maximum price filter.' },
+        limit: { type: 'number', description: 'Max results to return.' },
         page: { type: 'number', description: 'Page number for pagination, starting at 0. Only used when browse_all is true.' },
       },
-      required: ['browse_all', 'limit'],
+      required: ['browse_all', 'show_cards', 'limit'],
     },
   },
-  execute: async (input) => {
+  execute: async (input, ctx) => {
     const result = await productVersionHandler.searchProducts(input);
-    if (!result.found) return result;
+    if (!result.found) {
+      return { found: false, _instruction: 'No products found. Write a helpful response to the visitor.' };
+    }
+    const productCards: ProductInfo[] = result.products.map((p: any) => productVersionHandler.toProductInfo(p));
+    if (input.show_cards && productCards.length > 0) {
+      ctx.frontendActions.push({ type: 'show_products', products: productCards.map((p) => ({ ...p, url: p.url ?? `/product-page/${p.slug}` })) });
+    }
     return {
       found: true,
       mode: result.mode,
       hasNext: result.hasNext,
-      products: result.products,
-      productCards: result.products.map((p: any) => productVersionHandler.toProductInfo(p)),
+      // Only return raw product data when the bot needs to read it (no cards shown)
+      ...(input.show_cards ? {} : { products: result.products }),
+      _instruction: input.show_cards
+        ? 'Product cards are now visible to the visitor. Write a brief, natural response describing what you showed (e.g. "We carry a nice range of teas and oils — here are some options:").'
+        : 'Products retrieved. Answer the visitor\'s question using the data above. You MUST write a text response.',
     };
   },
 };
@@ -66,9 +75,7 @@ const showProductsTool: BackendTool<{ products: ProductInfo[] }> = {
   category: 'store',
   schema: {
     name: 'show_products',
-    description: `Display a selection of products to the visitor as cards. Call this after search_products with only the products you determined are relevant. 
-    Your text response should be very brief and just explain what kind of products are shown, since the visitor will see the cards below the message.
-    You may also use this when the visitor asks about what's in the cart.`,
+    description: `Display a curated subset of product cards. Use this only when you already retrieved products via search_products (with show_cards=false) and now want to display a specific filtered subset of them. Pass the relevant items from the productCards array. After calling this, write a brief text response.`,
     input_schema: {
       type: 'object',
       properties: {

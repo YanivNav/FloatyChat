@@ -22,14 +22,13 @@ export async function buildSystemPrompt(context?: VisitorContext): Promise<strin
       buildIdentitySection(props),
       buildContactSection(props),
       buildHoursSection(props),
-      buildPagesSection(context),
       buildCurrentPageSection(context),
       buildCartSection(context),
       buildMemberSection(tokenInfo.subjectType),
     ];
     if (productVersionHandler.isStoreInstalled()) {
-      sections.push(`The site has a store with the following product categories: ${Object.keys(await productVersionHandler.getCategories()).join(', ')}. 
-      If the user asks about a product, what's for sale, recommendations, pricing information, etc, use the available tools to find the information.`);
+      sections.push(`The site has a store with the following product categories: ${Object.keys(await productVersionHandler.getCategories()).join(', ')}.
+      ALWAYS use search_products when the visitor asks about products, what's for sale, recommendations, or pricing — never describe products from memory. Do not generate any response text before calling the tool; only write your reply after you have the results.`);
     }
 
     return sections.filter(Boolean).join('\n\n');
@@ -48,10 +47,11 @@ function buildIdentitySection(props: SiteProperties | undefined): string {
   if (description) section += ` ${description}`;
   else if (category) section += ` This is a ${category} business.`;
 
-  section += `\n\nYour role is to help visitors with questions about ${name} 
-  - its products, services, content, and any information related to this site. 
-  Only answer questions relevant to this website and its business. 
-  If a visitor asks about something unrelated, politely decline and redirect them to how you can help with ${name}.`;
+  section += `\n\nYour role is to help visitors with questions about ${name}:\n
+  - Its products, services, content, and any information related to this site. Your main goal is to serve as a salesman - helping visitors with questions about the site, its products, helping them find what they are looking for, and guiding them towards making a purchase or taking another conversion action.
+  - If a visitor asks about something you don't know about, try to use your available tools to search the site content, and only if you found nothing, tell the visitor you don't have information about that. 
+  - Always try to find the relevant information on the site and answer based on that, rather than using your own general knowledge. 
+  - If you don't know the answer but there are relevant tools available, use the tools to find the answer. Only say you don't know when there is truly no way for you to find the answer using the tools and site content.`;
 
   return section;
 }
@@ -87,15 +87,6 @@ function buildHoursSection(props: SiteProperties | undefined): string {
   return `Business hours${tz}:\n${lines.join('\n')}`;
 }
 
-function buildPagesSection(context: VisitorContext | undefined): string {
-  if (!context?.structure?.pages?.length) return '';
-
-  const pages = context.structure.pages
-    .map((p) => `"${p.url || (p.prefix + '...')}" (${p.name})`)
-    .join(',\n');
-
-  return `The site has the following pages:\n${pages}.\nUse this information to help visitors navigate the site.`;
-}
 
 function buildCurrentPageSection(context: VisitorContext | undefined): string {
   if (!context?.page) return '';

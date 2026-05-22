@@ -1,5 +1,3 @@
-import { site as wixSite } from "@wix/site-site";
-
 export interface ProductInfo {
   id: string;
   name: string;
@@ -31,7 +29,6 @@ export interface StoreCategory {
 }
 
 export interface VisitorContext {
-  structure?: Awaited<ReturnType<typeof wixSite.getSiteStructure>>;
   page?: PageInfo;
   cart?: CartItem[];
 }

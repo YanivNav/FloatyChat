@@ -298,8 +298,8 @@ const ChatWidget: FC = () => {
 };
 
 async function createVisitorContext(): Promise<VisitorContext> {
-  const [page, structure] = await Promise.all([getPageInfo(), wixClient.wixSite.getSiteStructure()]);
-  return { page, structure };
+  const page = await getPageInfo();
+  return { page };
 }
 
 async function getPageInfo(): Promise<PageInfo> {
