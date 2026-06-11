@@ -12,3 +12,7 @@ you can try updating the skills by running the following command:
 `wix skills update`
 
 This will update the skills to the latest version.
+
+# Plan
+
+The project plan is at @PLAN.md
