@@ -3,8 +3,8 @@ import { buildToolRegistry } from './tools/tools';
 
 export const GET: APIRoute = async () => {
   const registry = await buildToolRegistry();
-  const metadata = Array.from(registry.values()).map((t) => ({
-    name: t.schema.name,
+  const metadata = registry.map((t) => ({
+    name: t.name,
     displayName: t.displayName,
     shortDescription: t.shortDescription,
     category: t.category,

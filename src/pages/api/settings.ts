@@ -27,15 +27,27 @@ export async function loadBotSettings(): Promise<BotSettings> {
   const redis = getRedis();
 
   if (redis) {
-    const cached = await redis.get<BotSettings>(CACHE_KEY);
-    if (cached) return cached;
+    try {
+      const cached = await redis.get<BotSettings>(CACHE_KEY);
+      if (cached) return cached;
+    } catch (err) {
+      // Cache read failed — fall through to the source of truth (the DB).
+      console.error("Settings cache read failed; loading from DB:", err);
+    }
   }
 
   try {
     const elevatedQuery = auth.elevate(items.query);
     const { items: results } = await elevatedQuery(CHAT_SETTINGS_COLLECTION_ID).find();
     const item = (results[0] as BotSettings | undefined) ?? DEFAULT_CHAT_SETTINGS;
-    if (redis) await redis.set(CACHE_KEY, item, { ex: CACHE_TTL_SECONDS });
+    if (redis) {
+      // A cache-write failure must not discard the settings we just loaded.
+      try {
+        await redis.set(CACHE_KEY, item, { ex: CACHE_TTL_SECONDS });
+      } catch (err) {
+        console.error("Settings cache write failed; continuing without caching:", err);
+      }
+    }
     return item;
   } catch {
     return DEFAULT_CHAT_SETTINGS;
@@ -44,5 +56,11 @@ export async function loadBotSettings(): Promise<BotSettings> {
 
 export async function invalidateBotSettingsCache(): Promise<void> {
   const redis = getRedis();
-  if (redis) await redis.del(CACHE_KEY);
+  if (!redis) return;
+  try {
+    await redis.del(CACHE_KEY);
+  } catch (err) {
+    // Worst case the stale entry lingers until its TTL expires — not fatal.
+    console.error("Settings cache invalidation failed:", err);
+  }
 }

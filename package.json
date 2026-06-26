@@ -15,7 +15,7 @@
     "build:widget": "vite build --config vite.widget.config.ts"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.82.0",
+    "@ai-sdk/anthropic": "^2.0.83",
     "@upstash/ratelimit": "^2.0.8",
     "@upstash/redis": "^1.37.0",
     "@wix/app-management": "^1.0.148",
@@ -37,9 +37,11 @@
     "@wix/site-storage": "^1.23.0",
     "@wix/site-window": "^1.59.0",
     "@wix/stores": "^1.0.742",
+    "ai": "^5.0.206",
     "astro": "^5.8.0",
     "react-to-webcomponent": "^2.0.0",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@astrojs/cloudflare": "^12.5.3",
@@ -48,7 +50,7 @@
     "@types/react": "^18.3.1",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^6.0.1",
-    "@wix/cli": "^1.1.178",
+    "@wix/cli": "^1.1.220",
     "@wix/sdk-types": "^1.0.0",
     "patch-package": "^8.0.1",
     "react": "^18.3.1",

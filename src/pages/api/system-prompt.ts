@@ -27,8 +27,18 @@ export async function buildSystemPrompt(context?: VisitorContext): Promise<strin
       buildMemberSection(tokenInfo.subjectType),
     ];
     if (productVersionHandler.isStoreInstalled()) {
-      sections.push(`The site has a store with the following product categories: ${Object.keys(await productVersionHandler.getCategories()).join(', ')}.
-      ALWAYS use search_products when the visitor asks about products, what's for sale, recommendations, or pricing — never describe products from memory. Do not generate any response text before calling the tool; only write your reply after you have the results.`);
+      sections.push(`The site has a store. Product categories: ${Object.keys(await productVersionHandler.getCategories()).join(', ')}.
+
+Treat the catalog as the source of truth — never describe or price products from memory.
+
+Before answering ANY question that names a product, an item someone could buy, an ingredient or material, or anything related to the categories above, call search_products FIRST to check whether it exists. This explicitly includes definitional and price questions such as "what is X?" or "how much is X?" — do not answer those from general knowledge before searching. Do not write any text before the tool returns.
+
+Then match your answer to what the search found:
+- In the catalog: answer as a salesperson — use the results, show or mention the relevant products, and guide the visitor toward a purchase.
+- Not in the catalog but related to what this store sells: give a brief, helpful answer from general knowledge, and clearly state (up front or at the end) that the store does not carry it.
+- Unrelated to this store: keep it very short — lead with the fact that the store does not sell it, then at most one quick general remark. No long explanations, sections, or bullet lists for off-topic questions.
+
+Keep replies concise and proportional to relevance: the further off-topic the question, the shorter your reply.`);
     }
 
     return sections.filter(Boolean).join('\n\n');

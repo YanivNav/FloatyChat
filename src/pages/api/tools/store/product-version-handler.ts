@@ -20,7 +20,7 @@ export abstract class ProductVersionHandler<P> {
       return { found: true, mode: 'browse', products: [{ _id: input.product_id, name: input.product_name }] };
     }
     if (input.product_name) {
-      const result = await this.searchProducts({ query: input.product_name, limit: 5, browse_all: false });
+      const result = await this.searchProducts({ query: input.product_name, limit: 5, browse_all: false, show_cards: false });
       if (result.found && Array.isArray(result.products) && result.products.length > 0) {
         return { found: true, mode: 'search', products: result.products.slice(0, 1) };
       }

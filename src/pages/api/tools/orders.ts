@@ -1,5 +1,6 @@
+import { z } from "zod";
 import { orderFulfillments, orders } from "@wix/ecom";
-import type { BackendTool } from "./tools";
+import { defineTool } from "./tools";
 import { auth } from "@wix/essentials";
 
 
@@ -25,21 +26,15 @@ const formatOrder: (order: orders.Order, fulfillments?: orderFulfillments.Fulfil
   };
 }
 
-const getOrderStatusTool: BackendTool<{ order_number: string }> = {
+const getOrderStatusTool = defineTool({
+  name: 'get_order_status',
   displayName: 'Get Order Status',
   shortDescription: 'Looks up a specific order by number to show payment and delivery status.',
   category: 'orders',
-  schema: {
-    name: 'get_order_status',
-    description: 'Look up a specific order by order number. Use when the visitor provides an order number and asks about payment status, fulfillment, estimated delivery, or tracking.',
-    input_schema: {
-      type: 'object',
-      properties: {
-        order_number: { type: 'string', description: 'The order number exactly as the visitor stated it, e.g. "10042"' },
-      },
-      required: ['order_number'],
-    },
-  },
+  description: 'Look up a specific order by order number. Use when the visitor provides an order number and asks about payment status, fulfillment, estimated delivery, or tracking.',
+  inputSchema: z.object({
+    order_number: z.string().describe('The order number exactly as the visitor stated it, e.g. "10042"'),
+  }),
   execute: async (input) => {
     try {
       const result = await auth.elevate(orders.searchOrders)({
@@ -56,23 +51,17 @@ const getOrderStatusTool: BackendTool<{ order_number: string }> = {
       return { error: 'Could not retrieve order. Please try again.' };
     }
   },
-};
+});
 
-const listMyOrdersTool: BackendTool<{ limit?: number }> = {
+const listMyOrdersTool = defineTool({
+  name: 'list_my_orders',
   displayName: 'List My Orders',
   shortDescription: 'Shows a logged-in member their recent order history.',
   category: 'orders',
-  schema: {
-    name: 'list_my_orders',
-    description: "List the visitor's recent orders. Use when the visitor asks to see their orders or order history without providing a specific order number. Only works if the visitor is logged in.",
-    input_schema: {
-      type: 'object',
-      properties: {
-        limit: { type: 'number', description: 'Max number of orders to return, default 5' },
-      },
-      required: [],
-    },
-  },
+  description: "List the visitor's recent orders. Use when the visitor asks to see their orders or order history without providing a specific order number. Only works if the visitor is logged in.",
+  inputSchema: z.object({
+    limit: z.number().optional().describe('Max number of orders to return, default 5'),
+  }),
   execute: async (input) => {
     try {
       const tokenInfo = await auth.getTokenInfo();
@@ -92,23 +81,17 @@ const listMyOrdersTool: BackendTool<{ limit?: number }> = {
       return { error: 'Could not retrieve orders. Please try again.' };
     }
   },
-};
+});
 
-const cancelOrderTool: BackendTool<{ order_number: string }> = {
+const cancelOrderTool = defineTool({
+  name: 'cancel_order',
   displayName: 'Cancel Order',
   shortDescription: 'Cancels an order on behalf of the visitor and sends a confirmation email.',
   category: 'orders',
-  schema: {
-    name: 'cancel_order',
-    description: 'Cancel an order by order number. Only works for logged-in members cancelling their own orders. Do not attempt if the order is already cancelled or fulfilled.',
-    input_schema: {
-      type: 'object',
-      properties: {
-        order_number: { type: 'string', description: 'The order number to cancel, e.g. "10042"' },
-      },
-      required: ['order_number'],
-    },
-  },
+  description: 'Cancel an order by order number. Only works for logged-in members cancelling their own orders. Do not attempt if the order is already cancelled or fulfilled.',
+  inputSchema: z.object({
+    order_number: z.string().describe('The order number to cancel, e.g. "10042"'),
+  }),
   execute: async (input) => {
     try {
       const tokenInfo = await auth.getTokenInfo();
@@ -141,6 +124,6 @@ const cancelOrderTool: BackendTool<{ order_number: string }> = {
       return { success: false, message: 'Could not cancel the order. Please try again or contact support.' };
     }
   },
-};
+});
 
 export default [getOrderStatusTool, listMyOrdersTool, cancelOrderTool];

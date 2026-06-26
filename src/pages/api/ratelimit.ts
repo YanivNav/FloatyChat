@@ -29,7 +29,17 @@ export async function checkRateLimit(): Promise<Response | null> {
   } catch {
     key = "anonymous";
   }
-  const { success, limit, remaining, reset } = await limiter.limit(key);
+  let result: Awaited<ReturnType<Ratelimit["limit"]>>;
+  try {
+    result = await limiter.limit(key);
+  } catch (err) {
+    // Redis unreachable (provider down, deleted DB, network blip). Rate
+    // limiting is non-critical, so fail open and let the request through
+    // rather than taking down the chat.
+    console.error("Rate limit check failed; allowing request:", err);
+    return null;
+  }
+  const { success, limit, remaining, reset } = result;
 
   if (!success) {
     return new Response(
