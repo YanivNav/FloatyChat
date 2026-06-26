@@ -119,7 +119,7 @@
   padding: 12px 16px;
   border-top: 1px solid #ebebeb;
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 8px;
   background: #ffffff;
   flex-shrink: 0;
@@ -131,11 +131,21 @@
   border-radius: 24px;
   padding: 10px 16px;
   font-size: 14px;
+  line-height: 1.4;
   color: #1a1a2e;
   background: #f7f8fa;
   outline: none;
   transition: border-color 0.15s, box-shadow 0.15s;
   font-family: inherit;
+  resize: none;
+  max-height: 120px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+
+  &::-webkit-scrollbar        { width: 4px; }
+  &::-webkit-scrollbar-track  { background: transparent; }
+  &::-webkit-scrollbar-thumb  { background: #d0d5dd; border-radius: 4px; }
+  &::-webkit-scrollbar-button { display: none; }
 }
 
 .sendButton {
@@ -179,6 +189,19 @@
   background: #f0f0f0;
   color: #1a1a2e;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+
+  // Markdown content (rendered via snarkdown + DOMPurify)
+  p { margin: 0 0 6px; }
+  ul, ol { margin: 4px 0; padding-left: 18px; }
+  li { margin: 2px 0; }
+  a { color: inherit; text-decoration: underline; }
+  code { background: rgba(0, 0, 0, 0.06); padding: 1px 4px; border-radius: 4px; font-size: 0.92em; }
+  pre { background: rgba(0, 0, 0, 0.06); padding: 8px; border-radius: 6px; overflow-x: auto; }
+  pre code { background: none; padding: 0; }
+  blockquote { margin: 4px 0; padding-left: 10px; border-left: 3px solid rgba(0, 0, 0, 0.15); }
+  h1, h2, h3, h4, h5, h6 { margin: 6px 0 4px; font-size: 1em; font-weight: 700; }
+  > :first-child { margin-top: 0; }
+  > :last-child { margin-bottom: 0; }
 }
 
 @keyframes dotBounce {

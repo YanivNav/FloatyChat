@@ -1,6 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import ChatWidget from './chat-widget';
+import ChatWidget from './ChatWidget';
 import {wixClient} from './wix-client';
 
 const container = document.createElement('div');

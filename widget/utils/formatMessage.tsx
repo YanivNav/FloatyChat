@@ -1,26 +1,24 @@
-import React from 'react';
+import snarkdown from 'snarkdown';
+import DOMPurify from 'dompurify';
 
-export function renderFormattedMessage(text: string): React.ReactNode[] {
-  const lines = text.split(/\r?\n/);
+// snarkdown emits raw HTML and does NOT sanitize, and we inject the result via
+// dangerouslySetInnerHTML into customers' live sites — so DOMPurify is required.
+const ALLOWED_TAGS = [
+  'a', 'strong', 'b', 'em', 'i', 'code', 'pre',
+  'ul', 'ol', 'li', 'p', 'br', 'blockquote',
+  'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+];
+const ALLOWED_ATTR = ['href', 'target', 'rel'];
 
-  return lines.flatMap((line, lineIndex) => {
-    const parts: React.ReactNode[] = [];
-    const boldPattern = /\*\*(.+?)\*\*/g;
-    let lastIndex = 0;
-    let match: RegExpExecArray | null;
+// Force links to open in a new tab safely. (DOMPurify already blocks javascript: URIs.)
+DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+  if (node.tagName === 'A') {
+    node.setAttribute('target', '_blank');
+    node.setAttribute('rel', 'noopener noreferrer');
+  }
+});
 
-    while ((match = boldPattern.exec(line)) !== null) {
-      if (match.index > lastIndex) {
-        parts.push(line.slice(lastIndex, match.index));
-      }
-      parts.push(<strong key={`bold-${lineIndex}-${match.index}`}>{match[1]}</strong>);
-      lastIndex = match.index + match[0].length;
-    }
-
-    if (lastIndex < line.length) parts.push(line.slice(lastIndex));
-    if (parts.length === 0) parts.push('');
-    if (lineIndex < lines.length - 1) parts.push(<br key={`br-${lineIndex}`} />);
-
-    return parts;
-  });
+/** Render markdown to a sanitized HTML string for use with dangerouslySetInnerHTML. */
+export function renderMarkdown(text: string): string {
+  return DOMPurify.sanitize(snarkdown(text), { ALLOWED_TAGS, ALLOWED_ATTR });
 }

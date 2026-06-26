@@ -1,6 +1,6 @@
 import React, { type FC } from 'react';
 import type { Message } from '../types';
-import { renderFormattedMessage } from '../utils/formatMessage';
+import { renderMarkdown } from '../utils/formatMessage';
 import styles from '../chat-widget.module.scss';
 
 interface Props {
@@ -13,8 +13,7 @@ export const MessageBubble: FC<Props> = ({ msg, primaryColor }) => (
     <div
       className={`${styles.bubble} ${msg.role === 'user' ? styles.userBubble : styles.botBubble}`}
       style={msg.role === 'user' ? { background: primaryColor } : undefined}
-    >
-      {renderFormattedMessage(msg.text)}
-    </div>
+      dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.text) }}
+    />
   </div>
 );
